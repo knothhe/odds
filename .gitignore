@@ -1,2 +1,34 @@
+# Build output
 /dist/
+*.app
+*.dmg
+
+# Go
+*.exe
+*.test
+*.out
+coverage.*
+/source/odds
+go.work
+go.work.sum
+
+# macOS
 .DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.*
+
+# Assets are always tracked, even if they match a pattern above
+!/source/assets/**
+/source/assets/**/.DS_Store
