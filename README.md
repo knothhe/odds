@@ -28,10 +28,10 @@ go test ./...
 go tool mygo build       # 打包为 ../dist/darwin-arm64/odds.app 和 .dmg
 ```
 
-应用图标的源文件是 `source/assets/icon.svg`，修改后重新导出 PNG：
+应用图标的源文件是 `assets/icon.svg`，修改后重新导出 PNG：
 
 ```sh
-swift scripts/svg2png.swift source/assets/icon.svg source/assets/icon.png 1024
+swift scripts/svg2png.swift assets/icon.svg assets/icon.png 1024
 ```
 
 设置保存在 `~/Library/Application Support/odds/config.json`。
