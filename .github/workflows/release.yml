@@ -21,6 +21,8 @@ jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 40
+    outputs:
+      stable: ${{ steps.version.outputs.stable }}
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
       PYTHONDONTWRITEBYTECODE: '1'
@@ -42,6 +44,7 @@ jobs:
           test "$(uname -m)" = arm64
           python3 scripts/macos.py verify-tag --tag "$RELEASE_TAG"
           python3 -c 'import json,os; value=json.load(open("mygo.json"))["version"]; open(os.environ["GITHUB_OUTPUT"],"a").write("value="+value+"\n")'
+          python3 -c 'import json,os; value=json.load(open("mygo.json"))["version"]; open(os.environ["GITHUB_OUTPUT"],"a").write("stable="+str("-" not in value.split("+")[0]).lower()+"\n")'
       - name: Check the tagged source
         run: make check
       - name: Build fixed-signed app, DMG and signed full update
@@ -90,3 +93,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/publish-release.py
+
+  homebrew:
+    needs: [build, publish]
+    if: vars.HOMEBREW_TAP == 'knothhe/homebrew-tap' && needs.build.outputs.stable == 'true'
+    uses: ./.github/workflows/homebrew.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+    secrets:
+      HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}

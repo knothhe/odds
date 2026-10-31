@@ -106,3 +106,40 @@ Feed 固定为 `https://github.com/knothhe/odds/releases/latest/download/update-
 替换和旧包恢复都失败时，helper 保留安装位置旁 `.odds.app.update-*/old` 中的旧包、`app/odds.app` 中的新包和整个工作目录，将精确路径及恢复步骤写入 `RECOVERY.txt`，并停止自动启动。每次移动还核对目录的设备与 inode；若目标突然出现导致 macOS 把包移进其他目录，恢复记录会指出核验后的实际位置，避免误判成功并删除旧包。先退出相关实例并解决权限或文件系统错误，再核对该记录和目标路径后恢复；在确认恢复前不要删除工作目录。正常更新和成功恢复旧包时才清理暂存文件。该保护针对文件替换失败，不提供断电事务或启动健康检查保证。
 
 公开下载与真实升级链路必须在首次 Release 成功后另外验收；本地 fixture、Dev 构建和 workflow 静态检查不等同已发布。
+
+## Homebrew 分发
+
+沿用现有公开仓库 `knothhe/homebrew-tap`，配方为 `Casks/odds.rb`，消费 odds 已公开的正式 DMG。支持范围仅为 macOS 13+ / Apple Silicon，不提供 CLI。配方只从已公开的 Release 生成，不使用占位 hash。
+
+首次启用：为 **tap 仓库**配置可写 deploy key，将其私钥以 `HOMEBREW_TAP_DEPLOY_KEY` 存入 odds 仓库 Secret，并将 odds 仓库变量 `HOMEBREW_TAP` 设为 `knothhe/homebrew-tap`。此配置不在普通构建中使用。版本发布工作流成功公开稳定 Release 后，才传递确切 tag 调用 `homebrew.yml`；预发布不更新稳定 tap。未配置变量时跳过 tap 同步，不影响正式 Release。
+
+同步下载并复核唯一 DMG 与 SHA256SUMS、可信 URL、uploaded 状态、正数大小和 hash，再生成配方。现有配方同版本同内容不提交；同版本内容变化、旧版本、脏 checkout 和未推送的无关提交会失败。源码与 tap 分开 checkout，tap job 串行、只提交目标配方、不 force push。并发冲突正常失败；查看 tap 新状态后通过同一入口有界重试。
+
+本地可生成到 `dist/homebrew/Casks/odds.rb`，不改 tap：
+
+```sh
+make homebrew-cask RELEASE_TAG=v0.1.0
+# 可选：在干净、main 分支且没有未推送提交的既有 tap checkout 中更新文件，不提交或推送
+make homebrew-cask RELEASE_TAG=v0.1.0 HOMEBREW_TAP_DIR=/path/to/homebrew-tap
+```
+
+同步失败不改已公开 Release、不重新升版。可在 Actions 的 **Sync Homebrew cask** 手动入口传递原确切 tag 恢复；所有来源与版本校验仍生效。该 workflow 文件需先存在于默认分支。
+
+配方公开并完成验收后，用户命令为：
+
+```sh
+brew install --cask knothhe/tap/odds
+brew update
+brew upgrade --cask --greedy knothhe/tap/odds
+brew uninstall --cask knothhe/tap/odds
+```
+
+配方声明 `auto_updates true`，允许可写安装使用应用内 updater；Homebrew 升级需显式 `--greedy`。普通卸载退出准确 bundle ID，保留配置和数据；没有自动删除数据的 zap。保留 quarantine，固定签名不代替 Apple 公证；首次打开仍遵循当前签名和 Gatekeeper 的实际结果。
+
+## 离线依赖信息
+
+`make licenses` 从实际链接的 Go 包、精确模块版本及适用目录的 LICENSE/NOTICE 收集原文，同时收录 Go 工具链许可证。生成的 `source/internal/thirdparty/licenses.json` 进入源码、可执行文件嵌入资源和 `.app/Contents/Resources`。Onevra 改编组件与 Lucide 图标的独立许可证一并收录，现有 MyGo updater 补丁沿用上游授权文本。
+
+`make check` 与打包均执行过期检查；升级依赖或工具链后重新生成并审阅。关于页离线按需展示，框架和模块版本优先读取实际构建信息；本地 replacement 明确标注，不展示临时构建路径。新增第三方位图、字体或其他非 Go 资源时，需要按其真实来源扩展收集范围，不能仅依赖模块许可证。
+
+原生及公开链路的分层检查见[桌面验收](verification.md)。

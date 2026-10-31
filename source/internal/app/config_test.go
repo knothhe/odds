@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -8,6 +9,82 @@ import (
 	"testing"
 	"time"
 )
+
+func TestLegacyAndAdditiveSettingsSurviveSaving(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	original := `{"appearance":"dark","welcomed":true,"shortcuts":{"action":""},"futureOption":{"keep":true},"tools":{"mouse-center":{"highlight":false,"color":"red","newOption":42}}}`
+	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadConfig(path)
+	if err != nil || c.Schema != configSchema || c.Appearance != "dark" || c.Shortcuts["action"] != "" {
+		t.Fatalf("legacy load: %+v %v", c, err)
+	}
+	// Migration must not write before a real successful save.
+	if data, _ := os.ReadFile(path); string(data) != original {
+		t.Fatal("load rewrote legacy settings")
+	}
+	snapshot := c.snapshot()
+	c.extra["futureOption"][0] = '['
+	snapshot.Tools["mouse-center"] = mergeToolSettings(snapshot.Tools["mouse-center"], json.RawMessage(`{"highlight":true,"color":"green"}`))
+	if err := saveConfig(path, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	again, err := loadConfig(path)
+	var retained map[string]bool
+	json.Unmarshal(again.extra["futureOption"], &retained)
+	if err != nil || !retained["keep"] {
+		t.Fatalf("lost unknown fields: %+v %v", again, err)
+	}
+	var fields map[string]any
+	json.Unmarshal(again.Tools["mouse-center"], &fields)
+	if fields["newOption"] != float64(42) || fields["highlight"] != true {
+		t.Fatalf("lost tool settings: %v", fields)
+	}
+	if err := saveConfig(path, again); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFutureSettingsRemainUntouchedAndReadOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	// The future format may also change the types of fields we know.
+	original := `{"schema":2,"appearance":{"mode":"dark"},"futureSecret":"keep"}`
+	os.WriteFile(path, []byte(original), 0600)
+	c, err := loadConfig(path)
+	var future *futureConfigError
+	if !errors.As(err, &future) || future.schema != 2 {
+		t.Fatalf("future schema was treated as corruption: %v", err)
+	}
+	a := &App{path: path, cfg: c, readOnly: true}
+	a.cfg.Appearance = "light"
+	a.save()
+	if data, _ := os.ReadFile(path); string(data) != original {
+		t.Fatal("future settings overwritten")
+	}
+	backups, _ := filepath.Glob(path + ".broken-*")
+	if len(backups) != 0 {
+		t.Fatal("future settings backed up as corrupt")
+	}
+	c.Schema = 2
+	if err := saveConfig(path, c); err == nil {
+		t.Fatal("writer accepted a future schema")
+	}
+}
+
+func TestInvalidConfigurationShapeIsCorrupt(t *testing.T) {
+	for _, data := range []string{`null`, `[]`, `{"schema":-1}`, `{"schema":"2"}`, `{"schema":null}`} {
+		t.Run(data, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.json")
+			os.WriteFile(path, []byte(data), 0600)
+			_, err := loadConfig(path)
+			var corrupt *corruptError
+			if !errors.As(err, &corrupt) {
+				t.Fatalf("invalid shape accepted: %v", err)
+			}
+		})
+	}
+}
 
 func TestLoadConfigMissingGivesDefaults(t *testing.T) {
 	c, err := loadConfig(filepath.Join(t.TempDir(), "config.json"))

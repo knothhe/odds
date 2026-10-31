@@ -1,6 +1,9 @@
 window.H2_DESIGN_CANVAS = {
  title: "odds · 原生设置设计",
  boards: [
+  {file:"about-details.html",title:"11 / 关于 · 依赖与许可证",x:840,y:1160,w:760,h:560},
+  {file:"future-config.html",title:"12 / 较新版设置 · 只读保护",x:1680,y:1160,w:760,h:560},
+  {file:"about-details.html",title:"13 / 关于 · 最小窗口",x:4200,y:1160,w:480,h:420},
   {file:"general-dev.html",title:"10 / Dev · 独立身份与更新禁用",x:0,y:1160,w:760,h:560},
   {file:"general.html",title:"01 / 通用 · 外观、后台与关于",x:0,y:120,w:760,h:560},
   {file:"mouse-center.html",title:"02 / 鼠标居中 · 正常",x:840,y:120,w:760,h:560},

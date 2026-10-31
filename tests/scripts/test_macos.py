@@ -257,7 +257,7 @@ class SigningTests(unittest.TestCase):
                 try:
                     contents=command(*parse_args,input=password.encode()+b'\n')
                 except AssertionError:
-                    if not command('openssl','version').startswith(b'OpenSSL 3.'):raise
+                    if not signing_keychain.supports_legacy_provider(command('openssl','version')):raise
                     contents=command(*parse_args,'-legacy',input=password.encode()+b'\n')
                 self.assertEqual(len(re.findall(rb'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----',contents)),1)
                 certificates=re.findall(rb'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',contents,re.S)

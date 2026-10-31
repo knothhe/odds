@@ -102,9 +102,9 @@ def inspect_p12(data, password):
         try:
             private_pem = command(*parse_args, input=password_input)
         except BuildError:
-            # Keychain Access exports can use RC2, available through OpenSSL 3's
+            # Keychain Access exports can use RC2, available through OpenSSL 3+'s
             # legacy provider. This does not change or repackage the source P12.
-            if not command('openssl', 'version').startswith(b'OpenSSL 3.'):
+            if not signing_keychain.supports_legacy_provider(command('openssl', 'version')):
                 raise
             private_pem = command(*parse_args, '-legacy', input=password_input)
         require(len(re.findall(rb'-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----', private_pem)) == 1,

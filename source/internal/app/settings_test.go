@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -37,6 +38,18 @@ func TestHighlightSwitchPersistsItsChangedValue(t *testing.T) {
 	}
 	if settings.Highlight {
 		t.Fatal("switch saved its previous value")
+	}
+}
+
+func TestCloseShortcutWorksBeforeAnyControlHasFocus(t *testing.T) {
+	a := &App{}
+	closed := 0
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Children(func() { a.settingsShortcuts(c, func() { closed++ }) })
+	}, 300, 100)
+	tt.Key(ui.Cmd, ui.KeyW)
+	if closed != 1 {
+		t.Fatal("Cmd+W missed the nested shell without focus")
 	}
 }
 
@@ -120,6 +133,7 @@ func TestSettingsStatesAndLayouts(t *testing.T) {
 		width, height        int
 		dark, readOnly       bool
 		saveErr              string
+		readOnlyDetail       string
 	}{
 		{name: "general", category: "general", want: uicopy.OpenAtLogin, width: 760, height: 560},
 		{name: "tool", category: "mouse-center", want: "⌃⇧⌘C", width: 760, height: 560},
@@ -127,9 +141,10 @@ func TestSettingsStatesAndLayouts(t *testing.T) {
 		{name: "narrow", category: "mouse-center", want: "设置分类", width: 480, height: 420},
 		{name: "failed", category: "mouse-center", want: "重试保存", width: 480, height: 420, saveErr: "磁盘空间不足。"},
 		{name: "read-only", category: "general", want: "修改仅本次有效", width: 480, height: 420, readOnly: true},
+		{name: "future-config", category: "general", want: uicopy.FutureConfigTitle, width: 480, height: 420, readOnly: true, readOnlyDetail: fmt.Sprintf(uicopy.FutureConfigDetail, 2, configSchema)},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			a := &App{cfg: defaultConfig(), readOnly: scenario.readOnly, saveErr: scenario.saveErr}
+			a := &App{cfg: defaultConfig(), readOnly: scenario.readOnly, saveErr: scenario.saveErr, readOnlyDetail: scenario.readOnlyDetail}
 			tool := mousecenter.New()
 			a.tools = append(a.tools, tool)
 			a.actions = tool.Actions()

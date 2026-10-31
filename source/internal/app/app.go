@@ -25,36 +25,43 @@ import (
 // Name is the application's name.
 var Name = buildinfo.Name()
 
+// Set only by the isolated native verification build; ordinary previews keep
+// their stable single-instance identity.
+var previewInstance string
+
 // App owns UI state on the main thread. The writer receives immutable snapshots.
 type App struct {
-	path          string
-	cfg           Config
-	tools         []tool.Tool
-	actions       []tool.Action
-	shortcutErrs  map[string]string
-	suspended     bool
-	quitting      bool
-	loginEnabled  bool
-	loginErr      string
-	preview       bool
-	packaged      bool
-	version       string
-	writer        *configWriter
-	saveRevision  uint64
-	saving        bool
-	saveErr       string
-	quitBlocked   bool
-	cleanupTarget string
-	updateReady   bool
-	updateReason  string
-	errMsg        string
-	readOnly      bool // the config file could not be read: never save over it
-	backedUp      bool // an invalid config file was moved aside
+	path           string
+	cfg            Config
+	tools          []tool.Tool
+	actions        []tool.Action
+	shortcutErrs   map[string]string
+	suspended      bool
+	quitting       bool
+	loginEnabled   bool
+	loginErr       string
+	preview        bool
+	packaged       bool
+	version        string
+	writer         *configWriter
+	saveRevision   uint64
+	saving         bool
+	saveErr        string
+	quitBlocked    bool
+	cleanupTarget  string
+	updateReady    bool
+	updateReason   string
+	errMsg         string
+	readOnly       bool // the config file could not be read: never save over it
+	readOnlyDetail string
+	backedUp       bool // an invalid config file was moved aside
 
-	tray          *mygo.Tray
-	settings      *mygo.Window
-	settingsState components.SettingsState
-	recorder      hotkey.Recorder
+	tray             *mygo.Tray
+	settings         *mygo.Window
+	settingsState    components.SettingsState
+	recorder         hotkey.Recorder
+	dependenciesOpen bool
+	licenseOpen      map[string]*bool
 }
 
 // registry lists the tools in the order Settings and the tray show them.
@@ -86,8 +93,12 @@ func Run(preview bool, cleanupTarget string) error {
 		}
 		defer os.RemoveAll(dir)
 		name = fmt.Sprintf(uicopy.PreviewApp, name)
+		if previewInstance != "" {
+			name = fmt.Sprintf(uicopy.PreviewInstanceApp, name, previewInstance)
+		}
 	}
 	mygo.App.SetName(name)
+	mygo.App.SetLanguages(uicopy.Locale)
 	mygo.App.SetPath(mygo.PathUserData, dir)
 	if cleanupTarget == "" && !mygo.App.RequestSingleInstanceLock() {
 		return nil
@@ -102,7 +113,11 @@ func Run(preview bool, cleanupTarget string) error {
 		a.recorder.OnActiveChange = a.suspendShortcuts
 		a.cfg, err = loadConfig(a.path)
 		var corrupt *corruptError
+		var future *futureConfigError
 		switch {
+		case errors.As(err, &future):
+			a.readOnly = true
+			a.readOnlyDetail = fmt.Sprintf(uicopy.FutureConfigDetail, future.schema, configSchema)
 		case errors.As(err, &corrupt):
 			a.recoverConfig(err)
 		case err != nil:
@@ -208,7 +223,7 @@ func (a *App) save() {
 				a.saveErr = err.Error()
 				return
 			}
-			a.cfg.Tools[t.ID()] = raw
+			a.cfg.Tools[t.ID()] = mergeToolSettings(a.cfg.Tools[t.ID()], raw)
 		}
 	}
 	if a.readOnly {

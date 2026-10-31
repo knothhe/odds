@@ -214,6 +214,7 @@ def verify_release_artifacts(directory, meta, cert, identity):
 def build(channel, package=False):
     require(sys.platform == 'darwin', 'Build macOS bundles on macOS.')
     require(run('uname', '-m', capture=True) == 'arm64', 'This release currently supports verified macOS arm64 only.')
+    run(sys.executable, ROOT / 'scripts/licenses.py', '--check')
     sign, cert = signing(channel)
     updates = update_config() if channel == 'release' else None
     meta = metadata(channel)
@@ -248,7 +249,7 @@ def build(channel, package=False):
         cfg['out'] = str(temporary / 'output')
         record = temporary / 'build-info.json'
         record.write_text(json.dumps(meta, indent=2) + '\n')
-        cfg['resources'] = [str(record), cfg['icon']]
+        cfg['resources'] = [str(record), cfg['icon'], str(ROOT / 'source/internal/thirdparty/licenses.json')]
         if updates:
             notes = run(sys.executable, ROOT / 'scripts/release-notes.py', updates['github'], 'v' + meta['version'], capture=True)
             changelog = temporary / 'CHANGELOG.md'

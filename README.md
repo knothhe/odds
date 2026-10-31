@@ -2,6 +2,8 @@
 
 odds 是一个 macOS 菜单栏小工具集合（odds and ends，零碎小工具）。用 Go 编写，界面用 [MyGo](https://github.com/egoist/mygo) 的原生 UI（GPU 绘制，不使用 WebView），组件来自 [Onevra](https://github.com/oneo-me/onevra)。
 
+正式版下载见 [GitHub Releases](https://github.com/knothhe/odds/releases)，支持 macOS 13+ / Apple Silicon。
+
 ## 工具
 
 ### 鼠标居中
@@ -29,6 +31,8 @@ make install             # 从源码构建并安装到 ~/Applications/odds Dev.a
 make uninstall           # 卸载同一 Dev 安装，保留配置和数据
 make preview             # 临时配置预览，不注册全局快捷键或更改登录项
 make check               # 竞态测试、脚本测试与 MyGo 原生 UI 检查
+make verify-native       # 隔离原生窗口验收，不改登录项或全局快捷键
+make licenses            # 依赖升级后重新生成离线许可证
 ```
 
 Dev 与正式版的名称、bundle ID、数据目录和更新资格分别隔离。构建产物位于 `dist/dev/darwin-arm64/odds Dev.app`；正式包交由 GitHub Actions 从精确版本 tag 构建。首次发布用 `make release-initial`，后续用 `make release VERSION_BUMP=patch`，均默认只预览；实际执行需明确传 `RELEASE_FLAGS=--apply`。签名、安装路径、Secrets、附件、首次与升级发布及失败恢复见 [构建与发布说明](docs/build-release.md)。
@@ -38,6 +42,10 @@ Dev 与正式版的名称、bundle ID、数据目录和更新资格分别隔离�
 预览退出后会清理临时配置；预览中的鼠标动作仍会真实执行。正常运行的设置由单个后台写入器原子保存，连续修改合并为最新快照。保存失败时保留本次修改并提供「重试保存」；退出会等待正在进行的保存，失败时可重试或明确选择「放弃并退出」。无法读取的设置文件会保留原件，本次修改不会写回。
 
 版本以 `mygo.json` 为来源，MyGo 打包时注入，设置界面直接读取；普通 `go run` 显示「开发构建」。
+
+设置格式使用 schema 1，兼容原来的无版本文件；兼容格式的未知字段会保留。遇到较新格式时保留原文件并进入只读模式，提示升级应用。关于区域支持复制当前版本、打开项目主页，以及离线查看依赖版本与许可证；构建和 `make check` 会检查清单是否过期。
+
+Homebrew 已准备好针对现有 `knothhe/homebrew-tap` 的生成与同步流程；维护者启用同步并公开配方后，可使用 `brew install --cask knothhe/tap/odds`。启用条件、升级与卸载命令见[分发说明](docs/build-release.md#homebrew-分发)，原生与发布后检查见[验收说明](docs/verification.md)。
 
 应用图标的源文件是 `assets/icon.svg`，修改后重新导出 PNG：
 

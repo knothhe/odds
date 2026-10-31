@@ -1,0 +1,47 @@
+name: Sync Homebrew cask
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      HOMEBREW_TAP_DEPLOY_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact public stable release tag
+        required: true
+        type: string
+
+concurrency:
+  group: homebrew-tap-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: source-checkout
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: knothhe/homebrew-tap
+          ref: main
+          path: tap-checkout
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          fetch-depth: 0
+      - name: Verify public assets and sync exact cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 source-checkout/scripts/homebrew.py --tag "$RELEASE_TAG" --tap "$GITHUB_WORKSPACE/tap-checkout" --push

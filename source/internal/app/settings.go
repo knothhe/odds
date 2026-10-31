@@ -53,9 +53,8 @@ func (a *App) openSettings() {
 }
 
 func (a *App) settingsView(c *ui.Context) {
-	if a.recorder.Active() == "" && a.settings != nil {
-		// While a shortcut is recorded, ⌘W goes to the recorder.
-		c.OnShortcut(ui.Cmd, ui.KeyW, a.settings.Close)
+	if a.settings != nil {
+		a.settingsShortcuts(c, a.settings.Close)
 	}
 	a.recorder.BeginFrame()
 	defer a.recorder.EndFrame()
@@ -77,6 +76,16 @@ func (a *App) settingsView(c *ui.Context) {
 			},
 		})
 	})
+}
+
+func (a *App) settingsShortcuts(c *ui.Context, close func()) {
+	// The plain shell nests Content under its own layout. OnShortcut would
+	// scope the handler to that subtree and miss a newly opened, unfocused
+	// window. Query the window shortcut; the recorder still owns all keys
+	// while active.
+	if a.recorder.Active() == "" && c.Shortcut(ui.Cmd, ui.KeyW) {
+		close()
+	}
 }
 
 func (a *App) settingsStatus() string {
@@ -104,6 +113,9 @@ func (a *App) settingsNotice(c *ui.Context) {
 	case a.readOnly:
 		title = uicopy.SettingsUnavailable
 		detail = uicopy.ReadOnlyDetail
+		if a.readOnlyDetail != "" {
+			title, detail = uicopy.FutureConfigTitle, a.readOnlyDetail
+		}
 	case a.saveErr != "":
 		title = uicopy.SettingsNotSaved
 		detail = fmt.Sprintf(uicopy.SaveFailureDetail, a.saveErr)
@@ -185,9 +197,7 @@ func (a *App) generalCategory() components.SettingsCategory {
 		Groups: []components.SettingsGroup{
 			{ID: "preferences", Items: []components.SettingsItem{appearance, login}},
 			a.updatesGroup(),
-			{ID: "about", Title: uicopy.About, Items: []components.SettingsItem{
-				{ID: "name", Title: Name, Description: applicationVersion(a.version), Keywords: []string{uicopy.Version}},
-			}},
+			a.aboutGroup(),
 		},
 	}
 }

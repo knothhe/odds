@@ -27,6 +27,9 @@ func (a *App) setShortcut(actionID, acc string) {
 	a.save()
 	a.registerShortcuts()
 	a.refreshMenus()
+	if a.settings != nil {
+		a.settings.Invalidate()
+	}
 }
 
 // registerShortcuts binds every action's shortcut, recording in
@@ -73,4 +76,10 @@ func (a *App) suspendShortcuts(suspend bool) {
 		a.registerShortcuts()
 	}
 	a.refreshMenus()
+	// The recorder may stop while its row is being built, after the header
+	// and help text have already read its old state. Native rendering needs
+	// a fresh frame to clear that earlier content.
+	if a.settings != nil {
+		a.settings.Invalidate()
+	}
 }

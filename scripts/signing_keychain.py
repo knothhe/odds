@@ -12,6 +12,12 @@ import tempfile
 from macos import ROOT, BuildError, require
 
 
+def supports_legacy_provider(version):
+    """OpenSSL 3+ use providers; LibreSSL and older OpenSSL do not."""
+    match = re.match(rb'OpenSSL ([0-9]+)\.', version)
+    return match is not None and int(match[1]) >= 3
+
+
 def list_identities(run):
     """Return paired Code Signing identities without choosing or exporting any."""
     configured = os.environ.get('ODDS_SIGNING_KEYCHAIN', '').strip()

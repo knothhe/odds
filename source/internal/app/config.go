@@ -3,15 +3,21 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
+
+const configSchema = 1
 
 // Config is everything odds stores, in config.json in the user config
 // directory.
 type Config struct {
+	Schema     int    `json:"schema"`
 	Appearance string `json:"appearance"` // system, light or dark
 	Welcomed   bool   `json:"welcomed"`
 	// Shortcuts maps an action ID to its accelerator. An empty value turns
@@ -19,20 +25,102 @@ type Config struct {
 	Shortcuts map[string]string `json:"shortcuts"`
 	// Tools holds each tool's settings by tool ID.
 	Tools map[string]json.RawMessage `json:"tools"`
+	extra map[string]json.RawMessage
 }
 
 func defaultConfig() Config {
-	return Config{Appearance: "system", Shortcuts: map[string]string{}, Tools: map[string]json.RawMessage{}}
+	return Config{Schema: configSchema, Appearance: "system", Shortcuts: map[string]string{}, Tools: map[string]json.RawMessage{}}
+}
+
+// Keep additive fields when an older client edits a compatible configuration.
+// A newer schema is rejected before interpreting any of its fields.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return fmt.Errorf(uicopy.ConfigObjectError)
+	}
+	var schema int
+	if raw, ok := fields["schema"]; ok {
+		if string(raw) == "null" {
+			return fmt.Errorf(uicopy.ConfigObjectError)
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			return err
+		}
+	}
+	if schema > configSchema {
+		return &futureConfigError{schema}
+	}
+	if schema < 0 {
+		return fmt.Errorf(uicopy.ConfigSchemaError, schema)
+	}
+	type plain Config
+	value := plain(defaultConfig())
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	for _, key := range []string{"schema", "appearance", "welcomed", "shortcuts", "tools"} {
+		delete(fields, key)
+	}
+	*c = Config(value)
+	c.Schema, c.extra = configSchema, fields // unversioned files migrate in memory
+	return nil
+}
+
+func (c Config) MarshalJSON() ([]byte, error) {
+	if c.Schema > configSchema || c.Schema < 0 {
+		return nil, fmt.Errorf(uicopy.ConfigSchemaError, c.Schema)
+	}
+	type plain Config
+	c.Schema = configSchema
+	data, err := json.Marshal(plain(c))
+	if err != nil {
+		return nil, err
+	}
+	fields := cloneRaw(c.extra)
+	var known map[string]json.RawMessage
+	if err := json.Unmarshal(data, &known); err != nil {
+		return nil, err
+	}
+	maps.Copy(fields, known)
+	return json.Marshal(fields)
+}
+
+type futureConfigError struct{ schema int }
+
+func (e *futureConfigError) Error() string { return fmt.Sprintf(uicopy.ConfigSchemaError, e.schema) }
+
+func cloneRaw(source map[string]json.RawMessage) map[string]json.RawMessage {
+	result := make(map[string]json.RawMessage, len(source))
+	for key, raw := range source {
+		result[key] = append(json.RawMessage(nil), raw...)
+	}
+	return result
+}
+
+// Tool settings are JSON objects. Updating known fields must not erase additive
+// fields written by another compatible version of the same tool.
+func mergeToolSettings(previous, current json.RawMessage) json.RawMessage {
+	var before, after map[string]json.RawMessage
+	if json.Unmarshal(previous, &before) != nil || before == nil || json.Unmarshal(current, &after) != nil || after == nil {
+		return current
+	}
+	maps.Copy(before, after)
+	merged, err := json.Marshal(before)
+	if err != nil {
+		return current
+	}
+	return merged
 }
 
 // snapshot detaches maps and raw JSON from the UI-owned configuration.
 func (c Config) snapshot() Config {
 	c.Shortcuts = maps.Clone(c.Shortcuts)
-	tools := make(map[string]json.RawMessage, len(c.Tools))
-	for id, raw := range c.Tools {
-		tools[id] = append(json.RawMessage(nil), raw...)
-	}
-	c.Tools = tools
+	c.Tools = cloneRaw(c.Tools)
+	c.extra = cloneRaw(c.extra)
 	return c
 }
 
@@ -62,6 +150,10 @@ func loadConfig(path string) (Config, error) {
 		return c, err
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
+		var future *futureConfigError
+		if errors.As(err, &future) {
+			return defaultConfig(), future
+		}
 		return defaultConfig(), &corruptError{err}
 	}
 	c.normalize()

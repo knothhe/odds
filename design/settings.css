@@ -6,3 +6,5 @@
 @media(max-width:619px){aside{display:none}.mobile-nav{display:flex;flex-direction:column;padding:0 12px 12px;gap:8px}.mobile-nav select{width:100%}.mobile-nav .search{margin:0}.row{flex-direction:column;gap:12px}.control{align-self:flex-start}.content{padding:20px}.notice-top{flex-wrap:wrap}.status{font-size:11px}}
 
 .action-row{justify-content:flex-end}.action-row button{align-self:flex-end}
+
+.license{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.6 ui-monospace,monospace;margin-top:12px}details{min-width:0}summary{cursor:pointer;margin-bottom:12px}

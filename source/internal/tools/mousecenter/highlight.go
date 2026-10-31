@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/knothhe/odds/source/internal/uicopy"
 	"github.com/oneo-me/onevra/source/theme"
 )
 
@@ -30,7 +31,7 @@ type highlight struct {
 func (h *highlight) show(x, y float64) {
 	if h.win == nil {
 		h.win = mygo.NewWindow(mygo.WindowOptions{
-			Title: "odds highlight", Width: overlaySize, Height: overlaySize,
+			Title: uicopy.HighlightWindow, Width: overlaySize, Height: overlaySize,
 			Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 			DisableResize: true, DisableMove: true, AlwaysOnTop: true, SkipTaskbar: true,
 			Panel: true, BackgroundColor: "#00000000",
