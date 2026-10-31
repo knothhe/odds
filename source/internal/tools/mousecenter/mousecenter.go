@@ -12,6 +12,7 @@ import (
 
 	"github.com/knothhe/odds/source/internal/cursor"
 	"github.com/knothhe/odds/source/internal/tool"
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 // Settings are the tool's stored preferences.
@@ -21,15 +22,15 @@ type Settings struct {
 }
 
 var colors = []struct{ key, title, hex string }{
-	{"", "系统强调色", ""},
-	{"red", "红色", "#FF3B30"},
-	{"orange", "橙色", "#FF9500"},
-	{"yellow", "黄色", "#FFCC00"},
-	{"green", "绿色", "#34C759"},
-	{"pink", "粉色", "#FF2D55"},
+	{"", uicopy.ColorSystem, ""},
+	{"red", uicopy.ColorRed, "#FF3B30"},
+	{"orange", uicopy.ColorOrange, "#FF9500"},
+	{"yellow", uicopy.ColorYellow, "#FFCC00"},
+	{"green", uicopy.ColorGreen, "#34C759"},
+	{"pink", uicopy.ColorPink, "#FF2D55"},
 }
 
-// Tool is the "鼠标居中" tool.
+// Tool moves and highlights the pointer.
 type Tool struct {
 	settings  Settings
 	highlight highlight
@@ -45,9 +46,9 @@ func New() *Tool {
 }
 
 func (t *Tool) ID() string    { return "mouse-center" }
-func (t *Tool) Title() string { return "鼠标居中" }
+func (t *Tool) Title() string { return uicopy.MouseCenter }
 func (t *Tool) Description() string {
-	return "把鼠标指针移到屏幕中央，并高亮显示它的位置。"
+	return ""
 }
 func (t *Tool) Icon() *ui.SVG { return lucide.LocateFixed() }
 func (t *Tool) Settings() any { return &t.settings }
@@ -55,21 +56,18 @@ func (t *Tool) Settings() any { return &t.settings }
 func (t *Tool) Actions() []tool.Action {
 	return []tool.Action{
 		{
-			ID: "mouse-center.current", Title: "移到当前屏幕中央",
-			Description:     "移到鼠标所在屏幕的中央。",
+			ID: "mouse-center.current", Title: uicopy.CenterCurrent,
 			DefaultShortcut: "Ctrl+Shift+Cmd+C",
 			Run:             t.CenterOnCurrent,
 		},
 		{
-			ID: "mouse-center.next", Title: "移到下一块屏幕中央",
-			Description:     "多显示器时，依次移到下一块屏幕的中央。",
+			ID: "mouse-center.next", Title: uicopy.CenterNext,
 			DefaultShortcut: "Ctrl+Shift+Cmd+N",
 			Run:             t.CenterOnNext,
 		},
 		{
-			ID: "mouse-center.locate", Title: "高亮鼠标位置",
-			Description: "不移动鼠标，只显示它在哪里。",
-			Run:         t.Locate,
+			ID: "mouse-center.locate", Title: uicopy.LocatePointer,
+			Run: t.Locate,
 		},
 	}
 }
@@ -136,17 +134,17 @@ func colorTitle(key string) string {
 
 func (t *Tool) SettingsItems(changed func()) []components.SettingsItem {
 	return []components.SettingsItem{
-		{ID: "highlight", Title: "移动后高亮", Description: "移动后在指针处显示一个收缩的圆环。", Build: func(c *ui.Context) {
+		{ID: "highlight", Title: uicopy.HighlightOnMove, Build: func(c *ui.Context) {
 			before := t.settings.Highlight
-			components.Switch(c, &t.settings.Highlight, "移动后高亮", components.SwitchOptions{HideLabel: true})
+			components.Switch(c, &t.settings.Highlight, uicopy.HighlightOnMove, components.SwitchOptions{HideLabel: true})
 			if t.settings.Highlight != before {
 				changed()
 			}
 		}},
-		{ID: "color", Title: "高亮颜色", Build: func(c *ui.Context) {
+		{ID: "color", Title: uicopy.HighlightColor, Build: func(c *ui.Context) {
 			before := t.settings.Color
 			sel := components.Select(c, &t.settings.Color)
-			sel.Trigger.Label("高亮颜色").MinWidth(140).Children(func() {
+			sel.Trigger.Label(uicopy.HighlightColor).MinWidth(140).Children(func() {
 				components.Text(c, colorTitle(t.settings.Color)).SingleLine()
 			})
 			sel.Popup(func(ui.Element) {
@@ -158,10 +156,12 @@ func (t *Tool) SettingsItems(changed func()) []components.SettingsItem {
 				changed()
 			}
 		}},
-		{ID: "preview", Title: "预览", Description: "在鼠标当前位置播放一次高亮效果。", Build: func(c *ui.Context) {
-			if components.Button(c, "预览", components.ButtonSecondary).Clicked() {
-				t.Locate()
-			}
+		{ID: "preview", Title: uicopy.Preview, Content: func(c *ui.Context) {
+			ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
+				if components.Button(c, uicopy.Preview, components.ButtonSecondary).Clicked() {
+					t.Locate()
+				}
+			})
 		}},
 	}
 }

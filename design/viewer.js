@@ -120,7 +120,8 @@
     frame.tabIndex = -1;
     frame.setAttribute("aria-hidden", "true");
     // Examples are static. Real project boards may use their own local scripts.
-    frame.setAttribute("sandbox", "allow-scripts");
+    // Trusted local artboards load their stylesheet and copy dictionary.
+    frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
     element.append(link, frame);
     canvas.append(element);
     items.push({ element, x: board.x, y: board.y, w: board.w, h: board.h, board: true });

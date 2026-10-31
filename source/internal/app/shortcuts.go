@@ -1,9 +1,12 @@
 package app
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/egoist/mygo"
+
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 // shortcut returns the accelerator bound to an action.
@@ -42,13 +45,13 @@ func (a *App) registerShortcuts() {
 		}
 		key := normalize(acc)
 		if other, ok := owner[key]; ok {
-			a.shortcutErrs[act.ID] = "与「" + other + "」的快捷键冲突"
+			a.shortcutErrs[act.ID] = fmt.Sprintf(uicopy.ShortcutConflict, other)
 			continue
 		}
 		run := act.Run
 		if err := mygo.GlobalShortcut.Register(acc, run); err != nil {
 			log.Printf("register %s (%s): %v", act.ID, acc, err)
-			a.shortcutErrs[act.ID] = "无法注册，可能已被系统或其他应用占用"
+			a.shortcutErrs[act.ID] = uicopy.ShortcutOccupied
 			continue
 		}
 		owner[key] = act.Title

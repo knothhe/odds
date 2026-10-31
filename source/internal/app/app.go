@@ -19,6 +19,7 @@ import (
 	"github.com/knothhe/odds/source/internal/hotkey"
 	"github.com/knothhe/odds/source/internal/tool"
 	"github.com/knothhe/odds/source/internal/tools/mousecenter"
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 // Name is the application's name.
@@ -69,7 +70,7 @@ func Run(preview bool, cleanupTarget string) error {
 	preview = preview || buildinfo.Channel == "preview"
 	if cleanupTarget != "" {
 		if preview || buildinfo.Channel != "dev" || !matchesInstallation(cleanupTarget) {
-			return fmt.Errorf("Dev 清理请求与当前安装身份或路径不符")
+			return fmt.Errorf(uicopy.CleanupMismatch)
 		}
 	}
 	base, err := os.UserConfigDir()
@@ -84,7 +85,7 @@ func Run(preview bool, cleanupTarget string) error {
 			return err
 		}
 		defer os.RemoveAll(dir)
-		name += " Preview"
+		name = fmt.Sprintf(uicopy.PreviewApp, name)
 	}
 	mygo.App.SetName(name)
 	mygo.App.SetPath(mygo.PathUserData, dir)
@@ -107,14 +108,14 @@ func Run(preview bool, cleanupTarget string) error {
 		case err != nil:
 			// Unreadable: keep the file as it is and save nothing over it.
 			a.readOnly = true
-			a.report("读取设置失败，本次运行的修改不会保存", err)
+			a.report(uicopy.ReadSettingsFailure, err)
 		}
 		for _, t := range a.tools {
 			a.actions = append(a.actions, t.Actions()...)
 			if s := t.Settings(); s != nil {
 				if raw, ok := a.cfg.Tools[t.ID()]; ok {
 					if err := json.Unmarshal(raw, s); err != nil {
-						a.recoverConfig(fmt.Errorf("「%s」的设置：%w", t.Title(), err))
+						a.recoverConfig(fmt.Errorf(uicopy.ToolSettingsFailure, t.Title(), err))
 					}
 				}
 			}
@@ -163,7 +164,7 @@ func (a *App) start() {
 	})
 	a.registerShortcuts()
 	if err := a.createTray(); err != nil {
-		a.report("无法创建菜单栏图标", err)
+		a.report(uicopy.TrayFailure, err)
 	}
 	a.refreshMenus()
 	if !a.cfg.Welcomed || a.tray == nil || a.preview {
@@ -183,15 +184,15 @@ func (a *App) recoverConfig(cause error) {
 	backup, err := backupConfig(a.path, time.Now())
 	if err != nil {
 		a.readOnly = true
-		a.report("设置文件无效且无法备份，本次运行的修改不会保存", fmt.Errorf("%v；备份：%w", cause, err))
+		a.report(uicopy.BackupFailure, fmt.Errorf(uicopy.BackupErrorDetail, cause, err))
 		return
 	}
 	a.backedUp = true
-	a.report("设置文件无效，已备份到 "+backup+" 并改用默认设置", cause)
+	a.report(fmt.Sprintf(uicopy.SettingsRecovered, backup), cause)
 }
 
 func (a *App) report(msg string, err error) {
-	a.errMsg = msg + "：" + err.Error()
+	a.errMsg = fmt.Sprintf(uicopy.ErrorDetail, msg, err.Error())
 	log.Printf("%s: %v", msg, err)
 }
 

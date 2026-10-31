@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 type configWrite struct {
@@ -107,13 +110,13 @@ func (a *App) saved(revision uint64, err error) {
 func saveErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, os.ErrPermission):
-		return "没有写入设置文件的权限。"
+		return uicopy.SavePermission
 	case errors.Is(err, syscall.ENOSPC):
-		return "磁盘空间不足。"
+		return uicopy.SaveDiskFull
 	default:
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
-			return "无法写入设置文件：" + pathErr.Err.Error()
+			return fmt.Sprintf(uicopy.SaveWriteFailure, pathErr.Err.Error())
 		}
 		return err.Error()
 	}
@@ -127,7 +130,7 @@ func (a *App) beforeQuit(e *mygo.QuitEvent) {
 		err, finished := a.writer.wait(a.saveRevision, 3*time.Second)
 		if !finished {
 			e.PreventDefault()
-			a.saveErr = "设置仍在保存，请稍后再退出。"
+			a.saveErr = uicopy.SaveStillPending
 			a.quitBlocked = true
 			a.openSettings()
 			return
@@ -150,7 +153,7 @@ func (a *App) beforeQuit(e *mygo.QuitEvent) {
 
 func applicationVersion(version string) string {
 	if strings.TrimSpace(version) == "" {
-		return "开发构建"
+		return uicopy.DevelopmentBuild
 	}
 	return version
 }

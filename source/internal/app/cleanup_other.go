@@ -2,6 +2,10 @@
 
 package app
 
-import "fmt"
+import (
+	"fmt"
 
-func clearLoginItem() error { return fmt.Errorf("Dev 安装清理仅支持 macOS") }
+	"github.com/knothhe/odds/source/internal/uicopy"
+)
+
+func clearLoginItem() error { return fmt.Errorf(uicopy.CleanupMacOnly) }

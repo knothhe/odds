@@ -12,6 +12,7 @@ import (
 	"github.com/oneo-me/onevra/source/theme"
 
 	"github.com/knothhe/odds/source/internal/tools/mousecenter"
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 func TestHighlightSwitchPersistsItsChangedValue(t *testing.T) {
@@ -49,14 +50,14 @@ func TestRecordingDescriptionAndStatusClearAfterEscape(t *testing.T) {
 	if err := tt.Click("移到当前屏幕中央的快捷键"); err != nil {
 		t.Fatal(err)
 	}
-	if !tt.HasText("正在录制快捷键") {
-		t.Fatal("recording status was not drawn")
+	if !tt.HasText(uicopy.RecordingShortcut) || !tt.HasText(uicopy.ShortcutHelp) {
+		t.Fatal("recording status or contextual instructions were not drawn")
 	}
 	tt.Key(0, ui.KeyEscape)
 	if a.recorder.Active() != "" || tt.HasText("正在录制快捷键") {
 		t.Fatal("Escape left stale recording status")
 	}
-	if !tt.HasText("移到鼠标所在屏幕的中央。") {
+	if tt.HasText(uicopy.ShortcutHelp) {
 		t.Fatal("Escape left stale recording instructions")
 	}
 }
@@ -98,6 +99,19 @@ func TestSaveFailureRemainsVisibleWhileSearchingAndCanBeRetried(t *testing.T) {
 	}
 }
 
+func TestAppearanceChoicesRemainSearchable(t *testing.T) {
+	for _, query := range []string{uicopy.AppearanceSystem, uicopy.AppearanceLight, uicopy.AppearanceDark} {
+		t.Run(query, func(t *testing.T) {
+			a := &App{cfg: defaultConfig()}
+			a.settingsState.Query = query
+			tt := ui.NewTester(func(c *ui.Context) { theme.Apply(c); a.settingsView(c) }, 760, 560)
+			if !tt.HasText(uicopy.Appearance) || tt.HasText(uicopy.NoMatchingSettings) {
+				t.Fatalf("appearance choice %q did not find its setting: %v", query, tt.Texts())
+			}
+		})
+	}
+}
+
 // These exercise the actual native UI builders, including scrollable content
 // at the minimum window size. Optional screenshots are local review artifacts.
 func TestSettingsStatesAndLayouts(t *testing.T) {
@@ -107,7 +121,7 @@ func TestSettingsStatesAndLayouts(t *testing.T) {
 		dark, readOnly       bool
 		saveErr              string
 	}{
-		{name: "general", category: "general", want: "启动与后台", width: 760, height: 560},
+		{name: "general", category: "general", want: uicopy.OpenAtLogin, width: 760, height: 560},
 		{name: "tool", category: "mouse-center", want: "⌃⇧⌘C", width: 760, height: 560},
 		{name: "dark", category: "mouse-center", want: "⌃⇧⌘C", width: 760, height: 560, dark: true},
 		{name: "narrow", category: "mouse-center", want: "设置分类", width: 480, height: 420},

@@ -1,15 +1,15 @@
 window.H2_DESIGN_CANVAS = {
  title: "odds · 原生设置设计",
  boards: [
-  {file:"general-dev.html",title:"10 / Dev · 独立身份与更新禁用",x:0,y:1160,w:760,h:820},
-  {file:"general.html",title:"01 / 通用 · 外观、后台与关于",x:0,y:120,w:760,h:700},
-  {file:"mouse-center.html",title:"02 / 鼠标居中 · 正常",x:840,y:120,w:760,h:820},
-  {file:"recording.html",title:"03 / 快捷键 · 录制中",x:1680,y:120,w:760,h:820},
-  {file:"save-failed.html",title:"04 / 保存失败 · 保留输入与重试",x:2520,y:120,w:760,h:900},
-  {file:"quit-blocked.html",title:"05 / 退出受阻 · 重试或明确放弃",x:2520,y:1160,w:760,h:900},
-  {file:"save-retrying.html",title:"09 / 重试保存 · 保留上次错误",x:3360,y:1160,w:760,h:900},
-  {file:"read-only.html",title:"06 / 设置不可读 · 保留原件",x:3360,y:120,w:760,h:800},
-  {file:"mouse-center-dark.html",title:"07 / 鼠标居中 · 深色",x:4200,y:120,w:760,h:820},
+  {file:"general-dev.html",title:"10 / Dev · 独立身份与更新禁用",x:0,y:1160,w:760,h:560},
+  {file:"general.html",title:"01 / 通用 · 外观、后台与关于",x:0,y:120,w:760,h:560},
+  {file:"mouse-center.html",title:"02 / 鼠标居中 · 正常",x:840,y:120,w:760,h:560},
+  {file:"recording.html",title:"03 / 快捷键 · 录制中",x:1680,y:120,w:760,h:560},
+  {file:"save-failed.html",title:"04 / 保存失败 · 保留输入与重试",x:2520,y:120,w:760,h:560},
+  {file:"quit-blocked.html",title:"05 / 退出受阻 · 重试或明确放弃",x:2520,y:1160,w:760,h:560},
+  {file:"save-retrying.html",title:"09 / 重试保存 · 保留上次错误",x:3360,y:1160,w:760,h:560},
+  {file:"read-only.html",title:"06 / 设置不可读 · 保留原件",x:3360,y:120,w:760,h:560},
+  {file:"mouse-center-dark.html",title:"07 / 鼠标居中 · 深色",x:4200,y:120,w:760,h:560},
   {file:"mouse-center.html",title:"08 / 最小窗口 · 480 × 420",x:5040,y:120,w:480,h:420}
  ],
  notes: [

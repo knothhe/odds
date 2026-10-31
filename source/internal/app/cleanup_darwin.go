@@ -4,9 +4,12 @@ package app
 
 import (
 	"fmt"
+
 	"github.com/ebitengine/purego"
 	"github.com/ebitengine/purego/objc"
 	"github.com/egoist/mygo"
+
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 // MyGo 0.7.3 handles NotRegistered but still attempts unregister for NotFound.
@@ -17,7 +20,7 @@ func clearLoginItem() error {
 	}
 	class := objc.GetClass("SMAppService")
 	if class == 0 {
-		return fmt.Errorf("无法读取系统登录项状态")
+		return fmt.Errorf(uicopy.LoginStatusFailure)
 	}
 	service := objc.ID(class).Send(objc.RegisterName("mainAppService"))
 	status := objc.Send[int64](service, objc.RegisterName("status"))
@@ -27,6 +30,6 @@ func clearLoginItem() error {
 	case 1, 2:
 		return mygo.App.SetOpenAtLogin(false) // Enabled / RequiresApproval
 	default:
-		return fmt.Errorf("未知登录项状态：%d", status)
+		return fmt.Errorf(uicopy.UnknownLoginStatus, status)
 	}
 }
