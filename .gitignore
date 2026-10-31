@@ -24,6 +24,11 @@ go.work.sum
 *.swo
 *~
 
+# AI agents
+/.agents/
+/.claude/
+/.codex/
+
 # Environment
 .env
 .env.*
