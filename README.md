@@ -21,13 +21,23 @@ odds 是一个 macOS 菜单栏小工具集合（odds and ends，零碎小工具�
 需要 Go 1.27.3+（`GOTOOLCHAIN=auto` 会自动下载）。Go 代码在 `source/` 下，根目录的 `go.work` 引用了它，打包配置 `mygo.json` 在根目录：
 
 ```sh
-go tool mygo dev         # 热重载开发
-go tool mygo build       # 打包为 dist/darwin-arm64/odds.app 和 .dmg
-
-cd source
-go run .                 # 直接运行
-go test ./...
+make setup               # Dev 图标工具；首次运行一次
+make signing-list        # 查看可用签名身份
+make signing-config IDENTITY="证书的SHA1"  # 明确选择并记住本机 Dev 证书
+make build               # 固定签名的独立 Dev 应用
+make install             # 从源码构建并安装到 ~/Applications/odds Dev.app
+make uninstall           # 卸载同一 Dev 安装，保留配置和数据
+make preview             # 临时配置预览，不注册全局快捷键或更改登录项
+make check               # 竞态测试、脚本测试与 MyGo 原生 UI 检查
 ```
+
+Dev 与正式版的名称、bundle ID、数据目录和更新资格分别隔离。构建产物位于 `dist/dev/darwin-arm64/odds Dev.app`；正式包交由 GitHub Actions 从精确版本 tag 构建。首次发布用 `make release-initial`，后续用 `make release VERSION_BUMP=patch`，均默认只预览；实际执行需明确传 `RELEASE_FLAGS=--apply`。签名、安装路径、Secrets、附件、首次与升级发布及失败恢复见 [构建与发布说明](docs/build-release.md)。
+
+正式版接入 MyGo 原生自动更新窗口，默认每 24 小时检查，可从设置页或菜单手动检查；更新包使用固定公钥验证。Dev 和临时预览不会连接正式更新源。
+
+预览退出后会清理临时配置；预览中的鼠标动作仍会真实执行。正常运行的设置由单个后台写入器原子保存，连续修改合并为最新快照。保存失败时保留本次修改并提供「重试保存」；退出会等待正在进行的保存，失败时可重试或明确选择「放弃并退出」。无法读取的设置文件会保留原件，本次修改不会写回。
+
+版本以 `mygo.json` 为来源，MyGo 打包时注入，设置界面直接读取；普通 `go run` 显示「开发构建」。
 
 应用图标的源文件是 `assets/icon.svg`，修改后重新导出 PNG：
 
@@ -35,7 +45,11 @@ go test ./...
 swift scripts/svg2png.swift assets/icon.svg assets/icon.png 1024
 ```
 
-设置保存在 `~/Library/Application Support/odds/config.json`。
+正式版设置保存在 `~/Library/Application Support/odds/config.json`；Dev 使用独立的 `odds Dev` 目录。
+
+## 界面设计
+
+打开 [设计画布](design/index.html) 查看通用、鼠标居中、快捷键录制、保存失败、退出受阻、只读保护，以及深色与窄窗口状态。后续可见界面改动先更新相关画板，再实现到现有 MyGo / Onevra 组件，并在实际原生窗口中核对；状态和验证约定见 [设计说明](design/README.md)。
 
 ## 目录结构
 
@@ -44,7 +58,9 @@ swift scripts/svg2png.swift assets/icon.svg assets/icon.png 1024
 ├── mygo.json                     # 打包配置
 ├── go.work                       # 引用 source/ 模块
 ├── assets/                       # 应用图标等资产
-├── scripts/
+├── design/                       # 设置界面设计画板与状态说明
+├── scripts/                      # 构建、安装、签名与发布入口
+├── docs/                         # 发布与更新说明
 └── source/
     ├── main.go
     └── internal/

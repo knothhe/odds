@@ -1,5 +1,12 @@
 # Build output
 /dist/
+/.venv-build/
+/.odds-local.json
+/.odds-install.json
+__pycache__/
+*.pyc
+*.p12
+*.key
 *.app
 *.dmg
 

@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,6 +23,17 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{Appearance: "system", Shortcuts: map[string]string{}, Tools: map[string]json.RawMessage{}}
+}
+
+// snapshot detaches maps and raw JSON from the UI-owned configuration.
+func (c Config) snapshot() Config {
+	c.Shortcuts = maps.Clone(c.Shortcuts)
+	tools := make(map[string]json.RawMessage, len(c.Tools))
+	for id, raw := range c.Tools {
+		tools[id] = append(json.RawMessage(nil), raw...)
+	}
+	c.Tools = tools
+	return c
 }
 
 func (c *Config) normalize() {

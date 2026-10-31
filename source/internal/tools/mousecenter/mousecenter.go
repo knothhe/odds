@@ -137,7 +137,9 @@ func colorTitle(key string) string {
 func (t *Tool) SettingsItems(changed func()) []components.SettingsItem {
 	return []components.SettingsItem{
 		{ID: "highlight", Title: "移动后高亮", Description: "移动后在指针处显示一个收缩的圆环。", Build: func(c *ui.Context) {
-			if components.Switch(c, &t.settings.Highlight, "移动后高亮", components.SwitchOptions{HideLabel: true}).Changed() {
+			before := t.settings.Highlight
+			components.Switch(c, &t.settings.Highlight, "移动后高亮", components.SwitchOptions{HideLabel: true})
+			if t.settings.Highlight != before {
 				changed()
 			}
 		}},

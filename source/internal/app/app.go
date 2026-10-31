@@ -12,33 +12,43 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	_ "github.com/egoist/mygo/locales/zh-Hans"
 	"github.com/oneo-me/onevra/source/components"
 
+	"github.com/knothhe/odds/source/internal/buildinfo"
 	"github.com/knothhe/odds/source/internal/hotkey"
 	"github.com/knothhe/odds/source/internal/tool"
 	"github.com/knothhe/odds/source/internal/tools/mousecenter"
 )
 
 // Name is the application's name.
-const Name = "odds"
+var Name = buildinfo.Name()
 
-// Version is shown in Settings; keep it equal to version in mygo.json.
-const Version = "0.1.0"
-
-// App holds all application state. Everything runs on the main thread.
+// App owns UI state on the main thread. The writer receives immutable snapshots.
 type App struct {
-	path         string
-	cfg          Config
-	tools        []tool.Tool
-	actions      []tool.Action
-	shortcutErrs map[string]string
-	suspended    bool
-	quitting     bool
-	loginEnabled bool
-	loginErr     string
-	errMsg       string
-	readOnly     bool // the config file could not be read: never save over it
-	backedUp     bool // an invalid config file was moved aside
+	path          string
+	cfg           Config
+	tools         []tool.Tool
+	actions       []tool.Action
+	shortcutErrs  map[string]string
+	suspended     bool
+	quitting      bool
+	loginEnabled  bool
+	loginErr      string
+	preview       bool
+	packaged      bool
+	version       string
+	writer        *configWriter
+	saveRevision  uint64
+	saving        bool
+	saveErr       string
+	quitBlocked   bool
+	cleanupTarget string
+	updateReady   bool
+	updateReason  string
+	errMsg        string
+	readOnly      bool // the config file could not be read: never save over it
+	backedUp      bool // an invalid config file was moved aside
 
 	tray          *mygo.Tray
 	settings      *mygo.Window
@@ -55,36 +65,57 @@ func registry() []tool.Tool {
 }
 
 // Run starts odds and returns when it quits.
-func Run() error {
-	mygo.App.SetName(Name)
-	if !mygo.App.RequestSingleInstanceLock() {
-		return nil
+func Run(preview bool, cleanupTarget string) error {
+	preview = preview || buildinfo.Channel == "preview"
+	if cleanupTarget != "" {
+		if preview || buildinfo.Channel != "dev" || !matchesInstallation(cleanupTarget) {
+			return fmt.Errorf("Dev 清理请求与当前安装身份或路径不符")
+		}
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return err
 	}
 	dir := filepath.Join(base, Name)
-	mygo.App.SetPath(mygo.PathUserData, dir)
-
-	a := &App{path: filepath.Join(dir, "config.json"), tools: registry()}
-	a.recorder.OnActiveChange = a.suspendShortcuts
-	a.cfg, err = loadConfig(a.path)
-	var corrupt *corruptError
-	switch {
-	case errors.As(err, &corrupt):
-		a.recoverConfig(err)
-	case err != nil:
-		// Unreadable: keep the file as it is and save nothing over it.
-		a.readOnly = true
-		a.report("读取设置失败，本次运行的修改不会保存", err)
+	name := Name
+	if preview {
+		dir, err = os.MkdirTemp("", "odds-preview-*")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+		name += " Preview"
 	}
-	for _, t := range a.tools {
-		a.actions = append(a.actions, t.Actions()...)
-		if s := t.Settings(); s != nil {
-			if raw, ok := a.cfg.Tools[t.ID()]; ok {
-				if err := json.Unmarshal(raw, s); err != nil {
-					a.recoverConfig(fmt.Errorf("「%s」的设置：%w", t.Title(), err))
+	mygo.App.SetName(name)
+	mygo.App.SetPath(mygo.PathUserData, dir)
+	if cleanupTarget == "" && !mygo.App.RequestSingleInstanceLock() {
+		return nil
+	}
+
+	a := &App{
+		path: filepath.Join(dir, "config.json"), cfg: defaultConfig(), tools: registry(), preview: preview,
+		packaged: mygo.App.IsPackaged(), version: applicationVersion(mygo.App.Version()),
+		cleanupTarget: cleanupTarget,
+	}
+	if cleanupTarget == "" {
+		a.recorder.OnActiveChange = a.suspendShortcuts
+		a.cfg, err = loadConfig(a.path)
+		var corrupt *corruptError
+		switch {
+		case errors.As(err, &corrupt):
+			a.recoverConfig(err)
+		case err != nil:
+			// Unreadable: keep the file as it is and save nothing over it.
+			a.readOnly = true
+			a.report("读取设置失败，本次运行的修改不会保存", err)
+		}
+		for _, t := range a.tools {
+			a.actions = append(a.actions, t.Actions()...)
+			if s := t.Settings(); s != nil {
+				if raw, ok := a.cfg.Tools[t.ID()]; ok {
+					if err := json.Unmarshal(raw, s); err != nil {
+						a.recoverConfig(fmt.Errorf("「%s」的设置：%w", t.Title(), err))
+					}
 				}
 			}
 		}
@@ -93,25 +124,49 @@ func Run() error {
 	mygo.Theme.SetSource(mygo.ThemeSource(a.cfg.Appearance))
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {}) // a menu bar app keeps running
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.quitting = true })
+	mygo.App.OnBeforeQuit(a.beforeQuit)
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
+		if a.writer != nil {
+			a.writer.close()
+		}
 		mygo.GlobalShortcut.UnregisterAll()
+		for _, t := range a.tools {
+			if closer, ok := t.(interface{ Close() }); ok {
+				closer.Close()
+			}
+		}
 		if a.tray != nil {
 			a.tray.Destroy()
 		}
 	})
 	mygo.App.OnSecondInstance(func([]string, string) { a.openSettings() })
-	mygo.App.WhenReady(a.start)
-	return mygo.App.Run()
+	var cleanupErr error
+	if cleanupTarget != "" {
+		mygo.App.WhenReady(func() {
+			cleanupErr = clearLoginItem()
+			a.quitting = true
+			mygo.App.Quit()
+		})
+	} else {
+		a.setupUpdates()
+		mygo.App.WhenReady(a.start)
+	}
+	if err := mygo.App.Run(); err != nil {
+		return err
+	}
+	return cleanupErr
 }
 
 func (a *App) start() {
+	a.writer = newConfigWriter(func(c Config) error { return saveConfig(a.path, c) }, func(revision uint64, err error) {
+		go mygo.RunOnMain(func() { a.saved(revision, err) })
+	})
 	a.registerShortcuts()
 	if err := a.createTray(); err != nil {
 		a.report("无法创建菜单栏图标", err)
 	}
 	a.refreshMenus()
-	if !a.cfg.Welcomed || a.tray == nil {
+	if !a.cfg.Welcomed || a.tray == nil || a.preview {
 		a.cfg.Welcomed = true
 		a.save()
 		a.openSettings()
@@ -142,11 +197,14 @@ func (a *App) report(msg string, err error) {
 
 // save writes the configuration, including every tool's settings.
 func (a *App) save() {
+	if a.quitting {
+		return
+	}
 	for _, t := range a.tools {
 		if s := t.Settings(); s != nil {
 			raw, err := json.Marshal(s)
 			if err != nil {
-				a.report("保存设置失败", err)
+				a.saveErr = err.Error()
 				return
 			}
 			a.cfg.Tools[t.ID()] = raw
@@ -155,9 +213,14 @@ func (a *App) save() {
 	if a.readOnly {
 		return
 	}
-	if err := saveConfig(a.path, a.cfg); err != nil {
-		a.report("保存设置失败", err)
+	a.saveRevision++
+	if a.writer == nil {
+		// Startup and isolated tests may save before the UI service starts.
+		a.saved(a.saveRevision, saveConfig(a.path, a.cfg))
+		return
 	}
+	a.saving = true
+	a.writer.submit(configWrite{revision: a.saveRevision, config: a.cfg.snapshot()})
 }
 
 func (a *App) setAppearance(v string) {
@@ -167,6 +230,9 @@ func (a *App) setAppearance(v string) {
 }
 
 func (a *App) setOpenAtLogin(v bool) {
+	if !a.packaged || a.preview {
+		return
+	}
 	if err := mygo.App.SetOpenAtLogin(v); err != nil {
 		a.loginErr = err.Error()
 		a.loginEnabled = mygo.App.OpenAtLogin()

@@ -8,12 +8,13 @@ import (
 	"math"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/updater"
 )
 
 func (a *App) createTray() error {
 	var err error
 	a.tray, err = mygo.NewTray(mygo.TrayOptions{
-		ID: "main", Icon: trayIcon(), IconIsTemplate: true, ToolTip: Name,
+		ID: "main", Icon: trayIcon(), IconIsTemplate: true, ToolTip: mygo.App.Name(),
 	})
 	return err
 }
@@ -22,17 +23,17 @@ func (a *App) createTray() error {
 // actions with their current shortcuts.
 func (a *App) refreshMenus() {
 	settings := &mygo.MenuItem{ID: "settings", Label: "设置…", Accelerator: "Cmd+,", Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }}
-	quit := &mygo.MenuItem{ID: "quit", Label: "退出 odds", Accelerator: "Cmd+Q", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }}
+	quit := &mygo.MenuItem{ID: "quit", Label: "退出 " + Name, Accelerator: "Cmd+Q", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }}
 	if a.suspended {
 		// While a shortcut is recorded the menus claim no keys, so ⌘Q, ⌘C
 		// and the like reach the recorder.
 		settings.Accelerator, quit.Accelerator = "", ""
 		mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-			{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{settings, mygo.Separator(), quit}},
+			{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{settings, a.updateMenu(), mygo.Separator(), quit}},
 		}))
 	} else {
 		mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-			{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{settings, mygo.Separator(), quit}},
+			{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{settings, a.updateMenu(), mygo.Separator(), quit}},
 			{Role: mygo.RoleEditMenu},
 			{Role: mygo.RoleWindowMenu},
 		}))
@@ -56,10 +57,18 @@ func (a *App) refreshMenus() {
 	}
 	items = append(items, mygo.Separator(),
 		&mygo.MenuItem{ID: "settings", Label: "设置…", Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
+		a.updateMenu(),
 		mygo.Separator(),
-		&mygo.MenuItem{ID: "quit", Label: "退出 odds", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
+		&mygo.MenuItem{ID: "quit", Label: "退出 " + Name, Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	)
 	a.tray.SetMenu(mygo.NewMenu(items))
+}
+
+func (a *App) updateMenu() *mygo.MenuItem {
+	if !a.updateReady {
+		return &mygo.MenuItem{Label: "检查更新…", Disabled: true}
+	}
+	return updater.MenuItem()
 }
 
 // trayIcon draws a crosshair as a 36 × 36 template image (18 points at 2×).

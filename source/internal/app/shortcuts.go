@@ -31,7 +31,7 @@ func (a *App) setShortcut(actionID, acc string) {
 func (a *App) registerShortcuts() {
 	mygo.GlobalShortcut.UnregisterAll()
 	a.shortcutErrs = map[string]string{}
-	if a.suspended {
+	if a.suspended || a.preview {
 		return
 	}
 	owner := map[string]string{} // normalized accelerator → action title
