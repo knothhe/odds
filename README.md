@@ -18,14 +18,15 @@ odds 是一个 macOS 菜单栏小工具集合（odds and ends，零碎小工具�
 
 ## 开发
 
-需要 Go 1.27.3+（`GOTOOLCHAIN=auto` 会自动下载）。Go 相关的一切都在 `source/` 下：
+需要 Go 1.27.3+（`GOTOOLCHAIN=auto` 会自动下载）。Go 代码在 `source/` 下，根目录的 `go.work` 引用了它，打包配置 `mygo.json` 在根目录：
 
 ```sh
+go tool mygo dev         # 热重载开发
+go tool mygo build       # 打包为 dist/darwin-arm64/odds.app 和 .dmg
+
 cd source
 go run .                 # 直接运行
-go tool mygo dev         # 热重载开发
 go test ./...
-go tool mygo build       # 打包为 ../dist/darwin-arm64/odds.app 和 .dmg
 ```
 
 应用图标的源文件是 `assets/icon.svg`，修改后重新导出 PNG：
@@ -39,16 +40,20 @@ swift scripts/svg2png.swift assets/icon.svg assets/icon.png 1024
 ## 目录结构
 
 ```text
-source/
-├── main.go
+.
 ├── mygo.json                     # 打包配置
-└── internal/
-    ├── app/                      # 菜单栏、设置窗口、配置、全局快捷键
-    ├── tool/                     # Tool 接口
-    ├── hotkey/                   # 快捷键录制控件与格式转换
-    ├── cursor/                   # 移动鼠标指针（macOS）
-    └── tools/
-        └── mousecenter/          # 鼠标居中
+├── go.work                       # 引用 source/ 模块
+├── assets/                       # 应用图标等资产
+├── scripts/
+└── source/
+    ├── main.go
+    └── internal/
+        ├── app/                  # 菜单栏、设置窗口、配置、全局快捷键
+        ├── tool/                 # Tool 接口
+        ├── hotkey/               # 快捷键录制控件与格式转换
+        ├── cursor/               # 移动鼠标指针（macOS）
+        └── tools/
+            └── mousecenter/      # 鼠标居中
 ```
 
 ## 添加新工具

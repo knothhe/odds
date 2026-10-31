@@ -9,7 +9,6 @@
 *.out
 coverage.*
 /source/odds
-go.work
 go.work.sum
 
 # macOS
