@@ -25,8 +25,12 @@ class MyGoPatchTests(unittest.TestCase):
         self.module = self.root / 'original module'
         self.module.mkdir()
         self.original = self.module / 'updater.go'
-        self.source = b'package mygo\nconst installAfterExit = `' + mygo_patch.ORIGINAL_HELPER.encode() + b'`\n'
+        self.source = (mygo_patch.ORIGINAL_DOWNLOAD + '\n' + mygo_patch.ORIGINAL_EXTRACT + '\nup.current, target, progress)\nprogress func(downloaded, total int64)) error {\n\tpub, err := update.ParsePublicKey(key)\n').encode() + b'package mygo\nconst installAfterExit = `' + mygo_patch.ORIGINAL_HELPER.encode() + b'`\n'
         self.original.write_bytes(self.source)
+        packaging = self.module / 'cmd/mygo/updates.go'
+        packaging.parent.mkdir(parents=True)
+        self.packaging_source = mygo_patch.ORIGINAL_WRITE.encode()
+        packaging.write_bytes(self.packaging_source)
         (self.module / 'go.mod').write_text('module github.com/egoist/mygo\n\ngo 1.27.3\n')
         self.app = self.root / 'app'
         self.app.mkdir()
@@ -37,6 +41,7 @@ class MyGoPatchTests(unittest.TestCase):
         self.helper.write_bytes(b'pid=$1 target=$2 new=$3 work=$4\nexit 42\n')
         self.metadata = {'Path': mygo_patch.MODULE, 'Version': mygo_patch.VERSION, 'Dir': str(self.module)}
         self.patches = [
+            patch.object(mygo_patch, 'UPDATES_SHA256', hashlib.sha256(self.packaging_source).hexdigest()),
             patch.object(mygo_patch, 'UPDATER_SHA256', hashlib.sha256(self.source).hexdigest()),
             patch.object(mygo_patch, 'HELPER_PATH', self.helper),
             patch.object(mygo_patch, '_go_output', side_effect=self.go_output),
@@ -75,6 +80,8 @@ class MyGoPatchTests(unittest.TestCase):
             workspace, patched = self.workspace_copy(environment)
             self.assertNotEqual(patched, self.original)
             self.assertIn(self.helper.read_bytes(), patched.read_bytes())
+            self.assertIn(b'extractor.Extract(ctx, m.URL, archive, unpacked)', patched.read_bytes())
+            self.assertIn(b'ed25519.Sign(key, sum.Sum(nil))', (patched.parent / 'cmd/mygo/updates.go').read_bytes())
             self.assertNotIn(mygo_patch.ORIGINAL_HELPER.encode(), patched.read_bytes())
             self.assertEqual(self.original.read_bytes(), self.source)
             self.assertEqual(environment['ARBITRARY'], 'inherited')
@@ -225,6 +232,17 @@ class MyGoPatchTests(unittest.TestCase):
         with patch.object(sys, 'argv', ['go-patched.py', 'build', '--overlay=/tmp/evil.json']), patch.object(wrapper.subprocess, 'run') as command:
             self.assertEqual(wrapper.main(), 1)
             command.assert_not_called()
+
+
+class MyGoDMGIntegrationTests(unittest.TestCase):
+    def test_final_dmg_is_signed_in_place_without_extra_update_archive(self):
+        with mygo_patch.patched_environment() as environment:
+            mirror = Path(environment['GOWORK']).parent / 'mygo'
+            fixture = mirror / 'cmd/mygo/odds_dmg_test.go'
+            fixture.write_bytes((ROOT / 'tests/fixtures/mygo-dmg/updates_test.go').read_bytes())
+            result = subprocess.run(['go', 'test', 'github.com/egoist/mygo/cmd/mygo', '-run', '^TestOddsSignedDMGContract$'],
+                                    env=environment, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == '__main__':

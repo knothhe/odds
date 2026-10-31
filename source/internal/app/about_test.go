@@ -19,19 +19,19 @@ func TestAboutCopiesVersionAndShowsOfflineLicenses(t *testing.T) {
 		theme.Apply(c)
 		components.Settings(c, &a.settingsState, []components.SettingsCategory{{ID: "about", Groups: []components.SettingsGroup{a.aboutGroup()}}}, components.SettingsOptions{HideSidebar: true, HideSearch: true})
 	}, 760, 900)
-	if err := tt.Click(uicopy.CopyVersion); err != nil {
+	if err := tt.Click(uicopy.CopyVersion()); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(tt.Clipboard(), "1.2.3-rc.1") {
 		t.Fatal("copied version was guessed from another source")
 	}
-	if err := tt.Click(uicopy.ProjectPage); err != nil {
+	if err := tt.Click(uicopy.ProjectPage()); err != nil {
 		t.Fatal(err)
 	}
 	if urls := tt.OpenedURLs(); len(urls) != 1 || urls[0] != projectURL {
 		t.Fatalf("wrong project link: %v", urls)
 	}
-	if err := tt.Click(uicopy.Dependencies); err != nil {
+	if err := tt.Click(uicopy.Dependencies()); err != nil {
 		t.Fatal(err)
 	}
 	tt.Advance(300 * time.Millisecond)
@@ -65,9 +65,9 @@ func TestExpandedLicenseFitsSettingsWidth(t *testing.T) {
 			if !ok || r.X < 0 || r.X+r.W > float32(width) {
 				t.Fatalf("license overflows settings: %+v", r)
 			}
-			a.settingsState.Query = uicopy.ProjectPage
+			a.settingsState.Query = uicopy.ProjectPage()
 			tt.Frame()
-			if !tt.HasText(uicopy.ProjectPage) || tt.HasText(uicopy.NoMatchingSettings) {
+			if !tt.HasText(uicopy.ProjectPage()) || tt.HasText(uicopy.NoMatchingSettings()) {
 				t.Fatal("project entry is not searchable")
 			}
 		})

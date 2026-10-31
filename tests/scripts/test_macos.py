@@ -3,8 +3,6 @@ import json
 import os
 from pathlib import Path
 import tempfile
-import tarfile
-import io
 import shutil
 import hashlib
 import re
@@ -322,22 +320,8 @@ class SigningTests(unittest.TestCase):
                 with self.assertRaises(macos.BuildError):project.keygen()
                 command.assert_not_called()
 
-    def test_release_extraction_accepts_canonical_temp_alias_but_not_archive_links(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary).resolve()
-            actual=root/'actual';actual.mkdir()
-            alias=root/'alias';alias.symlink_to(actual,target_is_directory=True)
-            archive=root/'app.tar.gz'
-            with tarfile.open(archive,'w:gz') as writer:
-                entry=tarfile.TarInfo('odds.app/Contents/Info.plist')
-                entry.size=4
-                writer.addfile(entry,io.BytesIO(b'test'))
-            macos.extract_release_archive(archive,alias)
-            self.assertEqual((actual/'odds.app/Contents/Info.plist').read_bytes(),b'test')
-            with tarfile.open(archive,'w:gz') as writer:
-                entry=tarfile.TarInfo('odds.app/escape');entry.type=tarfile.SYMTYPE;entry.linkname='/tmp/outside'
-                writer.addfile(entry)
-            with self.assertRaises(macos.BuildError):macos.extract_release_archive(archive,alias)
+    def test_release_has_one_shared_dmg_and_manifest(self):
+        self.assertEqual(macos.release_names('1.2.3'), ['odds-1.2.3-arm64.dmg', 'update-darwin-arm64.json'])
     def test_requirement_cannot_bypass_the_pinned_certificate(self):
         expected='designated => identifier "com.knothhe.odds.dev" and certificate leaf = H"'+'A'*40+'"'
         self.assertTrue(macos.stable_requirement(expected,'com.knothhe.odds.dev','A'*40))

@@ -21,13 +21,16 @@ type Settings struct {
 	Color     string `json:"color"` // a key of colors; empty is the system accent color
 }
 
-var colors = []struct{ key, title, hex string }{
-	{"", uicopy.ColorSystem, ""},
-	{"red", uicopy.ColorRed, "#FF3B30"},
-	{"orange", uicopy.ColorOrange, "#FF9500"},
-	{"yellow", uicopy.ColorYellow, "#FFCC00"},
-	{"green", uicopy.ColorGreen, "#34C759"},
-	{"pink", uicopy.ColorPink, "#FF2D55"},
+var colors = []struct {
+	key, hex string
+	title    func() string
+}{
+	{"", "", uicopy.ColorSystem},
+	{"red", "#FF3B30", uicopy.ColorRed},
+	{"orange", "#FF9500", uicopy.ColorOrange},
+	{"yellow", "#FFCC00", uicopy.ColorYellow},
+	{"green", "#34C759", uicopy.ColorGreen},
+	{"pink", "#FF2D55", uicopy.ColorPink},
 }
 
 // Tool moves and highlights the pointer.
@@ -46,7 +49,7 @@ func New() *Tool {
 }
 
 func (t *Tool) ID() string    { return "mouse-center" }
-func (t *Tool) Title() string { return uicopy.MouseCenter }
+func (t *Tool) Title() string { return uicopy.MouseCenter() }
 func (t *Tool) Description() string {
 	return ""
 }
@@ -56,17 +59,17 @@ func (t *Tool) Settings() any { return &t.settings }
 func (t *Tool) Actions() []tool.Action {
 	return []tool.Action{
 		{
-			ID: "mouse-center.current", Title: uicopy.CenterCurrent,
+			ID: "mouse-center.current", Title: uicopy.CenterCurrent(),
 			DefaultShortcut: "Ctrl+Shift+Cmd+C",
 			Run:             t.CenterOnCurrent,
 		},
 		{
-			ID: "mouse-center.next", Title: uicopy.CenterNext,
+			ID: "mouse-center.next", Title: uicopy.CenterNext(),
 			DefaultShortcut: "Ctrl+Shift+Cmd+N",
 			Run:             t.CenterOnNext,
 		},
 		{
-			ID: "mouse-center.locate", Title: uicopy.LocatePointer,
+			ID: "mouse-center.locate", Title: uicopy.LocatePointer(),
 			Run: t.Locate,
 		},
 	}
@@ -126,39 +129,39 @@ func (t *Tool) inkColor(c *ui.Context) ui.Color {
 func colorTitle(key string) string {
 	for _, c := range colors {
 		if c.key == key {
-			return c.title
+			return c.title()
 		}
 	}
-	return colors[0].title
+	return colors[0].title()
 }
 
 func (t *Tool) SettingsItems(changed func()) []components.SettingsItem {
 	return []components.SettingsItem{
-		{ID: "highlight", Title: uicopy.HighlightOnMove, Build: func(c *ui.Context) {
+		{ID: "highlight", Title: uicopy.HighlightOnMove(), Build: func(c *ui.Context) {
 			before := t.settings.Highlight
-			components.Switch(c, &t.settings.Highlight, uicopy.HighlightOnMove, components.SwitchOptions{HideLabel: true})
+			components.Switch(c, &t.settings.Highlight, uicopy.HighlightOnMove(), components.SwitchOptions{HideLabel: true})
 			if t.settings.Highlight != before {
 				changed()
 			}
 		}},
-		{ID: "color", Title: uicopy.HighlightColor, Build: func(c *ui.Context) {
+		{ID: "color", Title: uicopy.HighlightColor(), Build: func(c *ui.Context) {
 			before := t.settings.Color
 			sel := components.Select(c, &t.settings.Color)
-			sel.Trigger.Label(uicopy.HighlightColor).MinWidth(140).Children(func() {
+			sel.Trigger.Label(uicopy.HighlightColor()).MinWidth(140).Children(func() {
 				components.Text(c, colorTitle(t.settings.Color)).SingleLine()
 			})
 			sel.Popup(func(ui.Element) {
 				for _, col := range colors {
-					sel.Item(col.key).Label(col.title).Children(func() { components.Text(c, col.title) })
+					sel.Item(col.key).Label(col.title()).Children(func() { components.Text(c, col.title()) })
 				}
 			})
 			if t.settings.Color != before {
 				changed()
 			}
 		}},
-		{ID: "preview", Title: uicopy.Preview, Content: func(c *ui.Context) {
+		{ID: "preview", Title: uicopy.Preview(), Content: func(c *ui.Context) {
 			ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
-				if components.Button(c, uicopy.Preview, components.ButtonSecondary).Clicked() {
+				if components.Button(c, uicopy.Preview(), components.ButtonSecondary).Clicked() {
 					t.Locate()
 				}
 			})

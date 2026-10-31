@@ -47,7 +47,7 @@ jobs:
           python3 -c 'import json,os; value=json.load(open("mygo.json"))["version"]; open(os.environ["GITHUB_OUTPUT"],"a").write("stable="+str("-" not in value.split("+")[0]).lower()+"\n")'
       - name: Check the tagged source
         run: make check
-      - name: Build fixed-signed app, DMG and signed full update
+      - name: Build fixed-signed app, DMG and its signed update manifest
         env:
           MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
@@ -63,7 +63,6 @@ jobs:
           retention-days: 14
           path: |
             dist/release/darwin-arm64/odds-${{ steps.version.outputs.value }}-arm64.dmg
-            dist/release/darwin-arm64/odds-${{ steps.version.outputs.value }}-darwin-arm64.tar.gz
             dist/release/darwin-arm64/update-darwin-arm64.json
             dist/release/darwin-arm64/SHA256SUMS
 

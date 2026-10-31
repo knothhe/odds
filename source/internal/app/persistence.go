@@ -95,6 +95,7 @@ func (a *App) saved(revision uint64, err error) {
 		return
 	}
 	a.saving = false
+	a.saveCause = err
 	if err != nil {
 		a.saveErr = saveErrorMessage(err)
 		log.Printf("save settings: %v", err)
@@ -110,13 +111,13 @@ func (a *App) saved(revision uint64, err error) {
 func saveErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, os.ErrPermission):
-		return uicopy.SavePermission
+		return uicopy.SavePermission()
 	case errors.Is(err, syscall.ENOSPC):
-		return uicopy.SaveDiskFull
+		return uicopy.SaveDiskFull()
 	default:
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
-			return fmt.Sprintf(uicopy.SaveWriteFailure, pathErr.Err.Error())
+			return fmt.Sprintf(uicopy.SaveWriteFailure(), pathErr.Err.Error())
 		}
 		return err.Error()
 	}
@@ -130,12 +131,14 @@ func (a *App) beforeQuit(e *mygo.QuitEvent) {
 		err, finished := a.writer.wait(a.saveRevision, 3*time.Second)
 		if !finished {
 			e.PreventDefault()
-			a.saveErr = uicopy.SaveStillPending
+			a.saveCause = nil
+			a.saveErr = uicopy.SaveStillPending()
 			a.quitBlocked = true
 			a.openSettings()
 			return
 		}
 		a.saving = false
+		a.saveCause = err
 		if err != nil {
 			a.saveErr = saveErrorMessage(err)
 		} else {
@@ -153,7 +156,7 @@ func (a *App) beforeQuit(e *mygo.QuitEvent) {
 
 func applicationVersion(version string) string {
 	if strings.TrimSpace(version) == "" {
-		return uicopy.DevelopmentBuild
+		return uicopy.DevelopmentBuild()
 	}
 	return version
 }

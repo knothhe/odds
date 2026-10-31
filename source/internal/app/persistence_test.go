@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"github.com/knothhe/odds/source/internal/uicopy"
 	"os"
 	"path/filepath"
 	"testing"
@@ -133,7 +134,7 @@ func TestQuitFlushesLatestSnapshotWithoutCancellingNativeRelaunch(t *testing.T) 
 }
 
 func TestApplicationVersionUsesPackagedValueOrDevelopmentLabel(t *testing.T) {
-	for input, want := range map[string]string{"": "开发构建", " ": "开发构建", "0.1.0": "0.1.0", "1.0.0-rc.1": "1.0.0-rc.1"} {
+	for input, want := range map[string]string{"": uicopy.DevelopmentBuild(), " ": uicopy.DevelopmentBuild(), "0.1.0": "0.1.0", "1.0.0-rc.1": "1.0.0-rc.1"} {
 		if got := applicationVersion(input); got != want {
 			t.Errorf("version(%q) = %q, want %q", input, got, want)
 		}

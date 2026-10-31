@@ -20,7 +20,7 @@ func clearLoginItem() error {
 	}
 	class := objc.GetClass("SMAppService")
 	if class == 0 {
-		return fmt.Errorf(uicopy.LoginStatusFailure)
+		return fmt.Errorf("%s", uicopy.LoginStatusFailure())
 	}
 	service := objc.ID(class).Send(objc.RegisterName("mainAppService"))
 	status := objc.Send[int64](service, objc.RegisterName("status"))
@@ -30,6 +30,6 @@ func clearLoginItem() error {
 	case 1, 2:
 		return mygo.App.SetOpenAtLogin(false) // Enabled / RequiresApproval
 	default:
-		return fmt.Errorf(uicopy.UnknownLoginStatus, status)
+		return fmt.Errorf(uicopy.UnknownLoginStatus(), status)
 	}
 }

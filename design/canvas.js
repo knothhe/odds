@@ -1,6 +1,8 @@
 window.H2_DESIGN_CANVAS = {
  title: "odds · 原生设置设计",
  boards: [
+  {file:"general-en.html",title:"14 / English · System language and fallback",x:0,y:1840,w:760,h:560},
+  {file:"general-en.html",title:"15 / English · Minimum window",x:840,y:1840,w:480,h:420},
   {file:"about-details.html",title:"11 / 关于 · 依赖与许可证",x:840,y:1160,w:760,h:560},
   {file:"future-config.html",title:"12 / 较新版设置 · 只读保护",x:1680,y:1160,w:760,h:560},
   {file:"about-details.html",title:"13 / 关于 · 最小窗口",x:4200,y:1160,w:480,h:420},

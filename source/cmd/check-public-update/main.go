@@ -3,9 +3,7 @@
 package main
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -82,33 +81,25 @@ func run() error {
 	if err := errors.Join(copyErr, body.Close()); err != nil {
 		return err
 	}
-	// Source withholds EOF until the archive signature, identity and paths pass.
-	if _, err = file.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	compressed, err := gzip.NewReader(file)
+	// Exercise the same authenticated DMG extraction boundary as the updater,
+	// entirely inside a private directory. No install helper or relaunch runs.
+	staging, err := os.MkdirTemp("", "odds-public-stage-*")
 	if err != nil {
 		return err
 	}
-	defer compressed.Close()
-	archive := tar.NewReader(compressed)
-	var identity buildinfo.Identity
-	for {
-		header, err := archive.Next()
-		if err != nil {
-			return err
-		}
-		if header.Name == "odds.app/Contents/Resources/build-info.json" {
-			if err = json.NewDecoder(io.LimitReader(archive, 1<<20)).Decode(&identity); err != nil {
-				return err
-			}
-			break
-		}
+	defer os.RemoveAll(staging)
+	destination := filepath.Join(staging, "app")
+	if err = s.Extract(ctx, s.manifest.URL, file.Name(), destination); err != nil {
+		return err
+	}
+	identity, err := buildinfo.Read(filepath.Join(destination, "odds.app"))
+	if err != nil {
+		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{
 		"current": *current, "candidate": candidate.Version, "identity": identity,
 		"feed":     "https://github.com/knothhe/odds/releases/latest/download/update-darwin-arm64.json",
-		"verified": "native-check-and-authenticated-download", "installed": false,
+		"verified": "native-check-authenticated-dmg-and-staging", "installed": false,
 	})
 }
 

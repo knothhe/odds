@@ -1,5 +1,5 @@
 // Package updateclient binds MyGo's native updater to authenticated release
-// identities before it can extract or stage an archive.
+// identities before it can extract or stage a DMG.
 package updateclient
 
 import (
@@ -19,6 +19,8 @@ import (
 
 	"github.com/egoist/mygo/netproxy"
 	"github.com/knothhe/odds/source/internal/updateartifact"
+
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 const maxManifestSize = 1 << 20
@@ -40,10 +42,10 @@ func New(repo, public, current string, client *http.Client) *Source {
 			Transport: netproxy.Transport(), Timeout: 5 * time.Minute,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if req.URL.Scheme != "https" {
-					return errors.New("update redirect must use HTTPS")
+					return errors.New(uicopy.UpdateRedirectHTTPS())
 				}
 				if len(via) >= 10 {
-					return errors.New("too many update redirects")
+					return errors.New(uicopy.UpdateRedirectLimit())
 				}
 				return nil
 			},
@@ -59,7 +61,7 @@ func (s *Source) get(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if req.URL.Scheme != "https" {
-		return nil, errors.New("update download must use HTTPS")
+		return nil, errors.New(uicopy.UpdateDownloadHTTPS())
 	}
 	req.Header.Set("User-Agent", "mygo-updater")
 	response, err := s.client.Do(req)
@@ -68,14 +70,14 @@ func (s *Source) get(ctx context.Context, url string) (io.ReadCloser, error) {
 	}
 	if response.StatusCode != http.StatusOK {
 		response.Body.Close()
-		return nil, fmt.Errorf("update server returned HTTP %d", response.StatusCode)
+		return nil, fmt.Errorf(uicopy.UpdateServerHTTP(), response.StatusCode)
 	}
 	return response.Body, nil
 }
 
 func (s *Source) Manifest(ctx context.Context, prereleases bool) (io.ReadCloser, error) {
 	if prereleases {
-		return nil, errors.New("this update source supports stable releases only")
+		return nil, errors.New(uicopy.UpdateStableOnly())
 	}
 	body, err := s.get(ctx, "https://github.com/"+s.repo+"/releases/latest/download/update-darwin-arm64.json")
 	if err != nil {
@@ -87,7 +89,7 @@ func (s *Source) Manifest(ctx context.Context, prereleases bool) (io.ReadCloser,
 		return nil, err
 	}
 	if len(data) > maxManifestSize {
-		return nil, errors.New("update manifest exceeds size limit")
+		return nil, errors.New(uicopy.UpdateManifestLimit())
 	}
 	var manifest updateartifact.Manifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
@@ -98,7 +100,7 @@ func (s *Source) Manifest(ctx context.Context, prereleases bool) (io.ReadCloser,
 	}
 	version, _, _ := strings.Cut(manifest.Version, "+")
 	if strings.Contains(version, "-") {
-		return nil, errors.New("the stable update feed cannot offer a prerelease")
+		return nil, errors.New(uicopy.UpdateStablePrerelease())
 	}
 	canonical, err := json.Marshal(manifest)
 	if err != nil {
@@ -131,7 +133,7 @@ func (s *Source) Open(ctx context.Context, token string) (io.ReadCloser, error) 
 	manifest, ok := s.candidates[token]
 	s.mu.Unlock()
 	if !ok {
-		return nil, errors.New("update candidate expired; check for updates again")
+		return nil, errors.New(uicopy.UpdateExpired())
 	}
 	body, err := s.get(ctx, manifest.URL)
 	if err != nil {
@@ -147,8 +149,8 @@ func (s *Source) Open(ctx context.Context, token string) (io.ReadCloser, error) 
 }
 
 // MyGo streams through Read to report progress. Withhold successful EOF until
-// the complete signed archive's identity is checked, so extraction and its
-// install helper cannot start on an unverified candidate.
+// the complete DMG signature is checked. Extract then checks the mounted
+// bundle identity before the install helper can start.
 type verifiedReader struct {
 	ctx             context.Context
 	body            io.ReadCloser
@@ -175,7 +177,7 @@ func (r *verifiedReader) Read(p []byte) (int, error) {
 	if n > 0 {
 		r.size += int64(n)
 		if r.size > r.manifest.Size {
-			err = errors.New("update archive exceeds declared size")
+			err = errors.New(uicopy.UpdateDownloadLimit())
 		} else if written, writeErr := r.file.Write(p[:n]); writeErr != nil {
 			err = writeErr
 		} else if written != n {
@@ -183,8 +185,8 @@ func (r *verifiedReader) Read(p []byte) (int, error) {
 		}
 	}
 	if err == io.EOF {
-		if verifyErr := updateartifact.VerifyArchive(r.file, r.manifest, r.current, r.public); verifyErr != nil {
-			err = fmt.Errorf("update archive validation: %w", verifyErr)
+		if verifyErr := updateartifact.VerifySignature(r.file, r.manifest, r.public); verifyErr != nil {
+			err = fmt.Errorf(uicopy.UpdateValidation(), verifyErr)
 		}
 	}
 	if cancelErr := r.ctx.Err(); cancelErr != nil {
@@ -202,4 +204,16 @@ func (r *verifiedReader) Close() error {
 	}
 	r.closed = true
 	return errors.Join(r.body.Close(), r.file.Close(), os.Remove(r.file.Name()))
+}
+
+// Extract is the reviewed MyGo adapter hook. A verified image is mounted read-only,
+// inspected and copied into private staging before the normal swap transaction.
+func (s *Source) Extract(ctx context.Context, token, filename, destination string) error {
+	s.mu.Lock()
+	manifest, ok := s.candidates[token]
+	s.mu.Unlock()
+	if !ok {
+		return errors.New(uicopy.UpdateExpired())
+	}
+	return updateartifact.VerifyAndExtract(ctx, filename, destination, manifest, s.current, s.public)
 }

@@ -13,6 +13,7 @@ func main() {
 	version := flag.String("version", "", "version")
 	commit := flag.String("commit", "", "source commit")
 	repo := flag.String("repo", "knothhe/odds", "repository")
+	signatureOnly := flag.Bool("signature-only", false, "verify bytes only after the macOS build job inspected the bundle")
 	flag.Parse()
 	var updates struct {
 		PublicKey string `json:"publicKey"`
@@ -22,11 +23,11 @@ func main() {
 		err = json.Unmarshal(data, &updates)
 	}
 	if err == nil {
-		err = updateartifact.Verify(*dir, *version, *commit, *repo, updates.PublicKey)
+		err = updateartifact.VerifyRelease(*dir, *version, *commit, *repo, updates.PublicKey, !*signatureOnly)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("Verified update signature, archive paths and exact release identity.")
+	fmt.Println("Verified DMG update contract.")
 }

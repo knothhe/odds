@@ -20,10 +20,7 @@ func (a *App) openSettings() {
 		return
 	}
 	if a.settings == nil {
-		title := fmt.Sprintf(uicopy.SettingsWindow, Name)
-		if a.preview {
-			title = fmt.Sprintf(uicopy.PreviewWindow, title)
-		}
+		title := a.settingsTitle()
 		shell := plain.NewShell(plain.ShellOptions{
 			Title: title, Width: 760, Height: 560, MinWidth: 480, MinHeight: 420, StateKey: "settings",
 			Hidden: true, Theme: theme.Onevra, Content: a.settingsView,
@@ -67,8 +64,8 @@ func (a *App) settingsView(c *ui.Context) {
 	ui.Column(c).Fill().MinWidth(0).Gap(0).Children(func() {
 		a.settingsNotice(c)
 		components.Settings(c, &a.settingsState, categories, components.SettingsOptions{
-			Narrow: w < 620, Title: uicopy.Settings, SearchLabel: uicopy.SearchSettings, SearchPlaceholder: uicopy.SearchSettings,
-			CategoryLabel: uicopy.SettingsCategories, ResultsTitle: uicopy.SearchResults, EmptyText: uicopy.NoMatchingSettings,
+			Narrow: w < 620, Title: uicopy.Settings(), SearchLabel: uicopy.SearchSettings(), SearchPlaceholder: uicopy.SearchSettings(),
+			CategoryLabel: uicopy.SettingsCategories(), ResultsTitle: uicopy.SearchResults(), EmptyText: uicopy.NoMatchingSettings(),
 			HeaderActions: func(c *ui.Context) {
 				if status := a.settingsStatus(); status != "" {
 					components.Text(c, status).FontSize(c.Theme().Rem(.8)).TextColor(c.Theme().TextMuted).Role(ui.RoleStatus)
@@ -91,15 +88,15 @@ func (a *App) settingsShortcuts(c *ui.Context, close func()) {
 func (a *App) settingsStatus() string {
 	switch {
 	case a.readOnly:
-		return uicopy.SessionOnly
+		return uicopy.SessionOnly()
 	case a.saving:
-		return uicopy.Saving
+		return uicopy.Saving()
 	case a.saveErr != "":
-		return uicopy.Unsaved
+		return uicopy.Unsaved()
 	case a.recorder.Active() != "":
-		return uicopy.RecordingShortcut
+		return uicopy.RecordingShortcut()
 	case a.preview:
-		return uicopy.PreviewSettings
+		return uicopy.PreviewSettings()
 	default:
 		return ""
 	}
@@ -111,20 +108,23 @@ func (a *App) settingsNotice(c *ui.Context) {
 	title, detail := "", ""
 	switch {
 	case a.readOnly:
-		title = uicopy.SettingsUnavailable
-		detail = uicopy.ReadOnlyDetail
-		if a.readOnlyDetail != "" {
-			title, detail = uicopy.FutureConfigTitle, a.readOnlyDetail
+		title = uicopy.SettingsUnavailable()
+		detail = uicopy.ReadOnlyDetail()
+		if a.readOnlySchema > 0 {
+			title = uicopy.FutureConfigTitle()
+			detail = fmt.Sprintf(uicopy.FutureConfigDetail(), a.readOnlySchema, configSchema)
+		} else if a.readOnlyDetail != "" {
+			title, detail = uicopy.FutureConfigTitle(), a.readOnlyDetail
 		}
 	case a.saveErr != "":
-		title = uicopy.SettingsNotSaved
-		detail = fmt.Sprintf(uicopy.SaveFailureDetail, a.saveErr)
+		title = uicopy.SettingsNotSaved()
+		detail = fmt.Sprintf(uicopy.SaveFailureDetail(), a.saveMessage())
 	case a.loginErr != "":
-		title = uicopy.LoginFailure
-		detail = fmt.Sprintf(uicopy.LoginFailureDetail, a.loginErr)
+		title = uicopy.LoginFailure()
+		detail = fmt.Sprintf(uicopy.LoginFailureDetail(), a.loginErr)
 	case a.errMsg != "":
-		title = uicopy.Attention
-		detail = a.errMsg
+		title = uicopy.Attention()
+		detail = a.reportMessage()
 	}
 	if title == "" {
 		return
@@ -135,11 +135,11 @@ func (a *App) settingsNotice(c *ui.Context) {
 		ui.Row(c).FillWidth().MinWidth(0).AlignItems(ui.Center).Gap(t.Space(2)).Children(func() {
 			components.Text(c, title).Bold().TextColor(t.Danger).Grow(1).MinWidth(0).Wrap()
 			if a.saveErr != "" && !a.readOnly {
-				if components.Button(c, uicopy.RetrySave, components.ButtonSecondary).Clicked() && !a.saving {
+				if components.Button(c, uicopy.RetrySave(), components.ButtonSecondary).Clicked() && !a.saving {
 					a.save()
 				}
 				if a.quitBlocked {
-					if components.Button(c, uicopy.DiscardAndQuit, components.ButtonGhost).Clicked() && !a.saving {
+					if components.Button(c, uicopy.DiscardAndQuit(), components.ButtonGhost).Clicked() && !a.saving {
 						a.quitting = true
 						mygo.App.Quit()
 					}
@@ -153,10 +153,10 @@ func (a *App) settingsNotice(c *ui.Context) {
 
 func (a *App) generalCategory() components.SettingsCategory {
 	appearance := components.SettingsItem{
-		ID: "appearance", Title: uicopy.Appearance,
-		Keywords: []string{uicopy.AppearanceSystem, uicopy.AppearanceLight, uicopy.AppearanceDark},
+		ID: "appearance", Title: uicopy.Appearance(),
+		Keywords: []string{uicopy.AppearanceSystem(), uicopy.AppearanceLight(), uicopy.AppearanceDark()},
 		Build: func(c *ui.Context) {
-			choices := []struct{ key, title string }{{"system", uicopy.AppearanceSystem}, {"light", uicopy.AppearanceLight}, {"dark", uicopy.AppearanceDark}}
+			choices := []struct{ key, title string }{{"system", uicopy.AppearanceSystem()}, {"light", uicopy.AppearanceLight()}, {"dark", uicopy.AppearanceDark()}}
 			value := a.cfg.Appearance
 			title := choices[0].title
 			for _, ch := range choices {
@@ -165,7 +165,7 @@ func (a *App) generalCategory() components.SettingsCategory {
 				}
 			}
 			sel := components.Select(c, &value)
-			sel.Trigger.Label(uicopy.Appearance).MinWidth(140).Children(func() { components.Text(c, title).SingleLine() })
+			sel.Trigger.Label(uicopy.Appearance()).MinWidth(140).Children(func() { components.Text(c, title).SingleLine() })
 			sel.Popup(func(ui.Element) {
 				for _, ch := range choices {
 					sel.Item(ch.key).Label(ch.title).Children(func() { components.Text(c, ch.title) })
@@ -178,24 +178,24 @@ func (a *App) generalCategory() components.SettingsCategory {
 	}
 	loginDescription := ""
 	if !a.packaged {
-		loginDescription = uicopy.LoginNeedsBundle
+		loginDescription = uicopy.LoginNeedsBundle()
 	}
 	if a.preview {
-		loginDescription = uicopy.LoginPreview
+		loginDescription = uicopy.LoginPreview()
 	}
 	login := components.SettingsItem{
-		ID: "login", Title: uicopy.OpenAtLogin, Description: loginDescription, Build: func(c *ui.Context) {
+		ID: "login", Title: uicopy.OpenAtLogin(), Description: loginDescription, Build: func(c *ui.Context) {
 			v := a.loginEnabled
-			components.Switch(c, &v, uicopy.OpenAtLogin, components.SwitchOptions{HideLabel: true}).Disabled(!a.packaged || a.preview)
+			components.Switch(c, &v, uicopy.OpenAtLogin(), components.SwitchOptions{HideLabel: true}).Disabled(!a.packaged || a.preview)
 			if v != a.loginEnabled {
 				a.setOpenAtLogin(v)
 			}
 		},
 	}
 	return components.SettingsCategory{
-		ID: "general", Title: uicopy.General, Icon: lucide.Settings(),
+		ID: "general", Title: uicopy.General(), Icon: lucide.Settings(),
 		Groups: []components.SettingsGroup{
-			{ID: "preferences", Items: []components.SettingsItem{appearance, login}},
+			{ID: "preferences", Items: []components.SettingsItem{a.languageItem(), appearance, login}},
 			a.updatesGroup(),
 			a.aboutGroup(),
 		},
@@ -206,11 +206,11 @@ func (a *App) toolCategory(t tool.Tool) components.SettingsCategory {
 	var shortcuts []components.SettingsItem
 	for _, act := range t.Actions() {
 		item := components.SettingsItem{
-			ID: act.ID, Title: act.Title, Description: act.Description, Keywords: []string{uicopy.Shortcuts, uicopy.ShortcutSearchTerm},
+			ID: act.ID, Title: act.Title, Description: act.Description, Keywords: []string{uicopy.Shortcuts(), uicopy.ShortcutSearchTerm()},
 			Build: func(c *ui.Context) {
 				v, changed := a.recorder.Field(c, act.ID, a.shortcut(act.ID), act.DefaultShortcut, hotkey.Texts{
-					Placeholder: uicopy.ShortcutUnset, Recording: uicopy.ShortcutPrompt, Clear: uicopy.ShortcutClear,
-					Reset: uicopy.ShortcutReset, Label: fmt.Sprintf(uicopy.ShortcutLabel, act.Title),
+					Placeholder: uicopy.ShortcutUnset(), Recording: uicopy.ShortcutPrompt(), Clear: uicopy.ShortcutClear(),
+					Reset: uicopy.ShortcutReset(), Label: fmt.Sprintf(uicopy.ShortcutLabel(), act.Title),
 				})
 				if changed {
 					a.setShortcut(act.ID, v)
@@ -218,7 +218,7 @@ func (a *App) toolCategory(t tool.Tool) components.SettingsCategory {
 			},
 		}
 		if a.recorder.Active() == act.ID {
-			item.Description = uicopy.ShortcutHelp
+			item.Description = uicopy.ShortcutHelp()
 		}
 		if msg, ok := a.shortcutErrs[act.ID]; ok {
 			desc := item.Description
@@ -232,12 +232,12 @@ func (a *App) toolCategory(t tool.Tool) components.SettingsCategory {
 		shortcuts = append(shortcuts, item)
 	}
 
-	groups := []components.SettingsGroup{{ID: "shortcuts", Title: uicopy.Shortcuts, Items: shortcuts}}
+	groups := []components.SettingsGroup{{ID: "shortcuts", Title: uicopy.Shortcuts(), Items: shortcuts}}
 	if items := t.SettingsItems(a.save); len(items) > 0 {
-		groups = append(groups, components.SettingsGroup{ID: "options", Title: uicopy.Options, Items: items})
+		groups = append(groups, components.SettingsGroup{ID: "options", Title: uicopy.Options(), Items: items})
 	}
 	return components.SettingsCategory{
-		ID: t.ID(), Title: t.Title(), Description: t.Description(), Icon: t.Icon(), Section: uicopy.Tools,
+		ID: t.ID(), Title: t.Title(), Description: t.Description(), Icon: t.Icon(), Section: uicopy.Tools(),
 		Groups: groups,
 	}
 }

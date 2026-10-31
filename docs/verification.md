@@ -6,9 +6,9 @@
 
 `make check` 包含 Go 竞态测试、脚本回归、MyGo UI 检查与依赖清单过期检查。配置测试覆盖无版本文件、显式关闭、未知字段保留、未来 schema 只读及损坏文件；保存视觉测试使用可控后台写入器、正常动画与帧时钟，覆盖明暗外观、0/40/600ms 操作、失败重试、鼠标/键盘重复提交、后续编辑及成功后的尾帧。像素比较覆盖整个设置界面，仅允许既有状态文字区域变化；成功移除错误提示属于预期布局变化。
 
-`make verify-native` 编译带 `e2e` tag 的独立预览程序，使用唯一单实例名称、私有配置和自动化 socket。检查真实原生关于控件、离线依赖、框架菜单语言、无控件焦点时的 ⌘W、关闭后隐藏、第二实例恢复聚焦、快捷键录制与 Escape 取消，以及正常退出。脚本不安装应用、不注册全局快捷键、不更改登录项；自动化插件不进入日常或正式构建。
+`make verify-native` 编译带 `e2e` tag 的独立预览程序，使用唯一单实例名称、私有配置和自动化 socket。检查中英文即时切换、窗口标题、双语原生菜单、真实原生关于控件、离线依赖、框架菜单语言、无控件焦点时的 ⌘W、关闭后隐藏、第二实例恢复聚焦、快捷键录制与 Escape 取消，以及正常退出。脚本不安装应用、不注册全局快捷键、不更改登录项；自动化插件不进入日常或正式构建。
 
-结果位于忽略的 `dist/verification/native-result.json`、`native-general.png` 和 `native.log`。成功文件记录实际系统版本与架构；失败时保留相应日志和可取得的状态。HTML 设计入口在 `design/index.html`，原生离屏截图仍使用 `ODDS_UI_SCREENSHOTS`。
+结果位于忽略的 `dist/verification/native-result.json`、`native-general-en.png`、`native-general.png` 和 `native.log`。成功文件记录实际系统版本与架构；失败时保留相应日志和可取得的状态。HTML 设计入口在 `design/index.html`，原生离屏截图仍使用 `ODDS_UI_SCREENSHOTS`。
 
 ## 需要实际平台条件的检查
 

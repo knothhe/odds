@@ -48,13 +48,13 @@ func (a *App) registerShortcuts() {
 		}
 		key := normalize(acc)
 		if other, ok := owner[key]; ok {
-			a.shortcutErrs[act.ID] = fmt.Sprintf(uicopy.ShortcutConflict, other)
+			a.shortcutErrs[act.ID] = fmt.Sprintf(uicopy.ShortcutConflict(), other)
 			continue
 		}
 		run := act.Run
 		if err := mygo.GlobalShortcut.Register(acc, run); err != nil {
 			log.Printf("register %s (%s): %v", act.ID, acc, err)
-			a.shortcutErrs[act.ID] = uicopy.ShortcutOccupied
+			a.shortcutErrs[act.ID] = uicopy.ShortcutOccupied()
 			continue
 		}
 		owner[key] = act.Title

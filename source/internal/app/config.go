@@ -18,6 +18,7 @@ const configSchema = 1
 // directory.
 type Config struct {
 	Schema     int    `json:"schema"`
+	Language   string `json:"language"`   // system, en, zh-Hans; unknown preferences are preserved
 	Appearance string `json:"appearance"` // system, light or dark
 	Welcomed   bool   `json:"welcomed"`
 	// Shortcuts maps an action ID to its accelerator. An empty value turns
@@ -29,7 +30,7 @@ type Config struct {
 }
 
 func defaultConfig() Config {
-	return Config{Schema: configSchema, Appearance: "system", Shortcuts: map[string]string{}, Tools: map[string]json.RawMessage{}}
+	return Config{Schema: configSchema, Appearance: "system", Language: "system", Shortcuts: map[string]string{}, Tools: map[string]json.RawMessage{}}
 }
 
 // Keep additive fields when an older client edits a compatible configuration.
@@ -40,12 +41,12 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if fields == nil {
-		return fmt.Errorf(uicopy.ConfigObjectError)
+		return fmt.Errorf("%s", uicopy.ConfigObjectError())
 	}
 	var schema int
 	if raw, ok := fields["schema"]; ok {
 		if string(raw) == "null" {
-			return fmt.Errorf(uicopy.ConfigObjectError)
+			return fmt.Errorf("%s", uicopy.ConfigObjectError())
 		}
 		if err := json.Unmarshal(raw, &schema); err != nil {
 			return err
@@ -55,14 +56,14 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 		return &futureConfigError{schema}
 	}
 	if schema < 0 {
-		return fmt.Errorf(uicopy.ConfigSchemaError, schema)
+		return fmt.Errorf(uicopy.ConfigSchemaError(), schema)
 	}
 	type plain Config
 	value := plain(defaultConfig())
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	for _, key := range []string{"schema", "appearance", "welcomed", "shortcuts", "tools"} {
+	for _, key := range []string{"schema", "language", "appearance", "welcomed", "shortcuts", "tools"} {
 		delete(fields, key)
 	}
 	*c = Config(value)
@@ -72,7 +73,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 
 func (c Config) MarshalJSON() ([]byte, error) {
 	if c.Schema > configSchema || c.Schema < 0 {
-		return nil, fmt.Errorf(uicopy.ConfigSchemaError, c.Schema)
+		return nil, fmt.Errorf(uicopy.ConfigSchemaError(), c.Schema)
 	}
 	type plain Config
 	c.Schema = configSchema
@@ -91,7 +92,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 
 type futureConfigError struct{ schema int }
 
-func (e *futureConfigError) Error() string { return fmt.Sprintf(uicopy.ConfigSchemaError, e.schema) }
+func (e *futureConfigError) Error() string { return fmt.Sprintf(uicopy.ConfigSchemaError(), e.schema) }
 
 func cloneRaw(source map[string]json.RawMessage) map[string]json.RawMessage {
 	result := make(map[string]json.RawMessage, len(source))
@@ -125,6 +126,9 @@ func (c Config) snapshot() Config {
 }
 
 func (c *Config) normalize() {
+	if c.Language == "" {
+		c.Language = "system"
+	}
 	if c.Appearance != "light" && c.Appearance != "dark" {
 		c.Appearance = "system"
 	}

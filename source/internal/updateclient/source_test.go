@@ -1,9 +1,7 @@
 package updateclient
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -16,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/knothhe/odds/source/internal/buildinfo"
 	"github.com/knothhe/odds/source/internal/updateartifact"
 )
 
@@ -26,38 +23,12 @@ func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { ret
 
 func clientFixture(t *testing.T, version string) (updateartifact.Manifest, []byte, string) {
 	t.Helper()
-	identity := buildinfo.Identity{Schema: 1, Name: "odds", BundleID: "com.knothhe.odds", Version: version,
-		Channel: "release", Executor: "ci", Commit: strings.Repeat("a", 40), Target: "darwin-arm64", Source: "source-build"}
-	metadata, err := json.Marshal(identity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var archive bytes.Buffer
-	gz := gzip.NewWriter(&archive)
-	tw := tar.NewWriter(gz)
-	for _, entry := range []struct {
-		name string
-		data []byte
-		mode int64
-	}{{"odds.app/Contents/Resources/build-info.json", metadata, 0644}, {"odds.app/Contents/MacOS/odds", []byte("fixture"), 0755}} {
-		if err := tw.WriteHeader(&tar.Header{Name: entry.name, Mode: entry.mode, Size: int64(len(entry.data))}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := tw.Write(entry.data); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := gz.Close(); err != nil {
-		t.Fatal(err)
-	}
+	archive := []byte("signed DMG bytes for " + version)
 	private := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))
-	hash := sha256.Sum256(archive.Bytes())
-	manifest := updateartifact.Manifest{Version: version, URL: "https://github.com/knothhe/odds/releases/download/v" + version + "/odds-" + version + "-darwin-arm64.tar.gz",
-		Size: int64(archive.Len()), Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(private, hash[:])), Notes: "Release notes", Date: "2026-10-31T00:00:00Z"}
-	return manifest, archive.Bytes(), base64.StdEncoding.EncodeToString(private.Public().(ed25519.PublicKey))
+	hash := sha256.Sum256(archive)
+	manifest := updateartifact.Manifest{Version: version, URL: "https://github.com/knothhe/odds/releases/download/v" + version + "/odds-" + version + "-arm64.dmg",
+		Size: int64(len(archive)), Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(private, hash[:])), Notes: "Release notes", Date: "2026-10-31T00:00:00Z"}
+	return manifest, archive, base64.StdEncoding.EncodeToString(private.Public().(ed25519.PublicKey))
 }
 
 func serveFixture(t *testing.T, manifest *updateartifact.Manifest, archives map[string][]byte) *http.Client {
@@ -94,27 +65,10 @@ func candidateToken(t *testing.T, source *Source) updateartifact.Manifest {
 	return offered
 }
 
-func TestStreamRejectsSignedOldArchiveWithForgedManifestVersion(t *testing.T) {
-	manifest, archive, public := clientFixture(t, "1.0.0")
-	manifest.Version = "999.0.0"
-	manifest.URL = "https://github.com/knothhe/odds/releases/download/v999.0.0/odds-999.0.0-darwin-arm64.tar.gz"
-	source := New("knothhe/odds", public, "2.0.0", serveFixture(t, &manifest, map[string][]byte{manifest.URL: archive}))
-	source.tempDir = t.TempDir()
-	offered := candidateToken(t, source)
-	body, err := source.Open(context.Background(), offered.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Match MyGo's download boundary: a successful copy would allow staging.
-	if _, err := io.Copy(io.Discard, io.LimitReader(body, manifest.Size+1)); err == nil {
-		t.Fatal("signed old archive reached successful EOF under forged version")
-	}
-	if err := body.Close(); err != nil {
-		t.Fatal(err)
-	}
-	entries, err := os.ReadDir(source.tempDir)
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("verification files retained: %v, %v", entries, err)
+func TestExtractionRequiresBoundCandidate(t *testing.T) {
+	source := New("knothhe/odds", "", "2.0.0", nil)
+	if err := source.Extract(context.Background(), "unknown", "missing.dmg", t.TempDir()); err == nil {
+		t.Fatal("unbound extraction accepted")
 	}
 }
 
@@ -200,7 +154,7 @@ func TestManifestFailureAndCurrentRelease(t *testing.T) {
 	if candidateToken(t, source).Version != "2.0.0" {
 		t.Fatal("healthy current release did not remain valid feed data")
 	}
-	manifest.URL = "https://example.org/untrusted.tar.gz"
+	manifest.URL = "https://example.org/untrusted.dmg"
 	if _, err := source.Manifest(context.Background(), false); err == nil {
 		t.Fatal("accepted untrusted archive URL")
 	}

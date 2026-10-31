@@ -21,7 +21,7 @@ func TestSaveRetryFramesKeepControlsStable(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		for _, duration := range []time.Duration{0, 40 * time.Millisecond, 600 * time.Millisecond} {
 			t.Run(fmt.Sprintf("dark-%t/%s", dark, duration), func(t *testing.T) {
-				a := &App{cfg: defaultConfig(), saveErr: uicopy.SaveDiskFull}
+				a := &App{cfg: defaultConfig(), saveErr: uicopy.SaveDiskFull()}
 				tool := mousecenter.New()
 				a.tools = append(a.tools, tool)
 				a.actions = tool.Actions()
@@ -35,33 +35,33 @@ func TestSaveRetryFramesKeepControlsStable(t *testing.T) {
 				// Always release the worker if an assertion fails.
 				defer close(release)
 				tt := ui.NewTester(func(c *ui.Context) { theme.Apply(c); a.settingsView(c) }, 760, 560)
-				tt.SetLocale(uicopy.Locale)
+				tt.SetLocale("en")
 				tt.SetDark(dark)
-				retry, ok := tt.Find(uicopy.RetrySave)
+				retry, ok := tt.Find(uicopy.RetrySave())
 				if !ok {
 					t.Fatal("missing retry")
 				}
 				tt.Move(retry.X+retry.W/2, retry.Y+retry.H/2)
-				for i := 0; i < 20 && !tt.Focused(uicopy.RetrySave); i++ {
+				for i := 0; i < 20 && !tt.Focused(uicopy.RetrySave()); i++ {
 					tt.Key(0, ui.KeyTab)
 				}
-				if !tt.Focused(uicopy.RetrySave) {
+				if !tt.Focused(uicopy.RetrySave()) {
 					t.Fatal("retry is not keyboard reachable")
 				}
 				tt.Advance(time.Second)
 				before := tt.Image()
-				oldStatus, _ := tt.Find(uicopy.Unsaved)
+				oldStatus, _ := tt.Find(uicopy.Unsaved())
 				a.save()
 				receive(t, started)
 				tt.Frame()
-				newStatus, _ := tt.Find(uicopy.Saving)
+				newStatus, _ := tt.Find(uicopy.Saving())
 				allowed := pixelRect(oldStatus).Union(pixelRect(newStatus)).Inset(-2)
 				check := func() {
 					t.Helper()
-					if current, _ := tt.Find(uicopy.RetrySave); current != retry {
+					if current, _ := tt.Find(uicopy.RetrySave()); current != retry {
 						t.Fatal("retry moved during saving")
 					}
-					if !tt.Focused(uicopy.RetrySave) {
+					if !tt.Focused(uicopy.RetrySave()) {
 						t.Fatal("saving stole retry focus")
 					}
 					assertPixelsOutside(t, before, tt.Image(), allowed)
@@ -72,17 +72,17 @@ func TestSaveRetryFramesKeepControlsStable(t *testing.T) {
 					check()
 				}
 				// Mouse and keyboard paths must both refuse a duplicate write.
-				tt.Click(uicopy.RetrySave)
+				tt.Click(uicopy.RetrySave())
 				tt.Key(0, ui.KeyEnter)
 				if a.saveRevision != 1 || writes.Load() != 1 {
 					t.Fatal("retry submitted overlapping saves")
 				}
-				release <- errors.New(uicopy.SaveDiskFull)
+				release <- errors.New(uicopy.SaveDiskFull())
 				result := receive(t, completed)
 				a.saved(result.revision, result.err)
 				tt.Frame()
 				tt.Advance(time.Second)
-				if !tt.HasText(uicopy.SaveDiskFull) {
+				if !tt.HasText(uicopy.SaveDiskFull()) {
 					t.Fatal("retry hid the failure")
 				}
 				assertPixelsOutside(t, before, tt.Image(), allowed)
@@ -98,7 +98,7 @@ func TestSaveRetryFramesKeepControlsStable(t *testing.T) {
 				result = receive(t, completed)
 				a.saved(result.revision, result.err)
 				tt.Frame()
-				if a.cfg.Appearance != "dark" || tt.HasText(uicopy.SettingsNotSaved) {
+				if a.cfg.Appearance != "dark" || tt.HasText(uicopy.SettingsNotSaved()) {
 					t.Fatal("success lost later input or kept stale notice")
 				}
 				tt.Advance(time.Second)

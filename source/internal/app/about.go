@@ -16,6 +16,8 @@ import (
 
 const projectURL = "https://github.com/knothhe/odds"
 
+var modifiedDependencies = map[string]bool{}
+
 var linkedVersions = func() map[string]string {
 	versions := map[string]string{"Go": runtime.Version()}
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -25,7 +27,7 @@ var linkedVersions = func() map[string]string {
 				if module.Replace.Version != "" {
 					version = module.Replace.Version
 				} else {
-					version = fmt.Sprintf(uicopy.ModifiedDependency, version)
+					modifiedDependencies[module.Path] = true
 				}
 			}
 			versions[module.Path] = version
@@ -43,15 +45,15 @@ func (a *App) versionText() string {
 }
 
 func (a *App) aboutGroup() components.SettingsGroup {
-	return components.SettingsGroup{ID: "about", Title: uicopy.About, Items: []components.SettingsItem{
-		{ID: "name", Title: Name, Description: applicationVersion(a.version), Keywords: []string{uicopy.Version}, Build: func(c *ui.Context) {
-			components.Button(c, uicopy.CopyVersion, components.ButtonSecondary).OnClick(func() {
+	return components.SettingsGroup{ID: "about", Title: uicopy.About(), Items: []components.SettingsItem{
+		{ID: "name", Title: Name, Description: applicationVersion(a.version), Keywords: []string{uicopy.Version()}, Build: func(c *ui.Context) {
+			components.Button(c, uicopy.CopyVersion(), components.ButtonSecondary).OnClick(func() {
 				c.Services().WriteClipboard(a.versionText())
-				c.Announce(uicopy.VersionCopied)
+				c.Announce(uicopy.VersionCopied())
 			})
 		}},
-		{ID: "project", Keywords: []string{uicopy.ProjectPage}, Content: func(c *ui.Context) {
-			components.Button(c, uicopy.ProjectPage, components.ButtonGhost).OnClick(func() {
+		{ID: "project", Keywords: []string{uicopy.ProjectPage()}, Content: func(c *ui.Context) {
+			components.Button(c, uicopy.ProjectPage(), components.ButtonGhost).OnClick(func() {
 				c.OpenURLThen(projectURL, func(err error) {
 					if err != nil {
 						a.report(uicopy.ProjectOpenFailure, err)
@@ -59,9 +61,9 @@ func (a *App) aboutGroup() components.SettingsGroup {
 				})
 			})
 		}},
-		{ID: "dependencies", Keywords: []string{uicopy.Dependencies}, Content: func(c *ui.Context) {
-			parts := components.Collapsible(c, uicopy.Dependencies, &a.dependenciesOpen, components.CollapsibleOptions{}, func() {
-				components.Text(c, uicopy.DependenciesDetail).TextColor(c.Theme().TextMuted).Wrap()
+		{ID: "dependencies", Keywords: []string{uicopy.Dependencies()}, Content: func(c *ui.Context) {
+			parts := components.Collapsible(c, uicopy.Dependencies(), &a.dependenciesOpen, components.CollapsibleOptions{}, func() {
+				components.Text(c, uicopy.DependenciesDetail()).TextColor(c.Theme().TextMuted).Wrap()
 				if a.licenseOpen == nil {
 					a.licenseOpen = map[string]*bool{}
 				}
@@ -74,6 +76,9 @@ func (a *App) aboutGroup() components.SettingsGroup {
 					version := linkedVersions[dependency.Path]
 					if version == "" {
 						version = dependency.Version
+					}
+					if modifiedDependencies[dependency.Path] {
+						version = fmt.Sprintf(uicopy.ModifiedDependency(), version)
 					}
 					part := components.Collapsible(c.Key(dependency.Path), dependency.Path+" "+version, open, components.CollapsibleOptions{}, func() {
 						for _, text := range dependency.Texts {

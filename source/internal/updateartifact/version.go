@@ -3,6 +3,8 @@ package updateartifact
 import (
 	"fmt"
 	"strings"
+
+	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
 type semanticVersion struct {
@@ -16,22 +18,22 @@ func parseVersion(value string) (semanticVersion, error) {
 	var result semanticVersion
 	main, build, hasBuild := strings.Cut(value, "+")
 	if hasBuild && !validIdentifiers(build, false) {
-		return result, fmt.Errorf("invalid semantic version: %q", value)
+		return result, fmt.Errorf(uicopy.UpdateVersionInvalid(), value)
 	}
 	core, prerelease, hasPrerelease := strings.Cut(main, "-")
 	parts := strings.Split(core, ".")
 	if len(parts) != len(result.core) {
-		return result, fmt.Errorf("invalid semantic version: %q", value)
+		return result, fmt.Errorf(uicopy.UpdateVersionInvalid(), value)
 	}
 	for index, part := range parts {
 		if !numeric(part) || len(part) > 1 && part[0] == '0' {
-			return result, fmt.Errorf("invalid semantic version: %q", value)
+			return result, fmt.Errorf(uicopy.UpdateVersionInvalid(), value)
 		}
 		result.core[index] = part
 	}
 	if hasPrerelease {
 		if !validIdentifiers(prerelease, true) {
-			return result, fmt.Errorf("invalid semantic version: %q", value)
+			return result, fmt.Errorf(uicopy.UpdateVersionInvalid(), value)
 		}
 		result.prerelease = strings.Split(prerelease, ".")
 	}

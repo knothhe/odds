@@ -64,8 +64,8 @@ def main():
     run(sys.executable, ROOT / 'scripts/macos.py', 'verify-tag', '--tag', tag)
     commit = run('git','rev-parse','HEAD',capture=True)
     directory = ROOT / 'dist/release/darwin-arm64'
-    run('go','run','./source/cmd/verify-update','--dir',directory,'--version',ver,'--repo',repo,'--commit',commit)
-    names = [f'odds-{ver}-arm64.dmg', f'odds-{ver}-darwin-arm64.tar.gz', 'update-darwin-arm64.json', 'SHA256SUMS']
+    run('go','run','./source/cmd/verify-update','--dir',directory,'--version',ver,'--repo',repo,'--commit',commit,'--signature-only')
+    names = [f'odds-{ver}-arm64.dmg', 'update-darwin-arm64.json', 'SHA256SUMS']
     expected = {name:directory/name for name in names}
     verify_checksums(directory, names[:-1])
     require(all(path.is_file() and not path.is_symlink() and path.stat().st_size for path in expected.values()), 'Incomplete release artifacts.')

@@ -25,8 +25,8 @@ func (a *App) createTray() error {
 // refreshMenus rebuilds the tray menu and the app menu, which show the
 // actions with their current shortcuts.
 func (a *App) refreshMenus() {
-	settings := &mygo.MenuItem{ID: "settings", Label: uicopy.SettingsMenu, Accelerator: "Cmd+,", Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }}
-	quit := &mygo.MenuItem{ID: "quit", Label: fmt.Sprintf(uicopy.QuitApp, Name), Accelerator: "Cmd+Q", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }}
+	settings := &mygo.MenuItem{ID: "settings", Label: uicopy.SettingsMenu(), Accelerator: "Cmd+,", Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }}
+	quit := &mygo.MenuItem{ID: "quit", Label: fmt.Sprintf(uicopy.QuitApp(), Name), Accelerator: "Cmd+Q", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }}
 	if a.suspended {
 		// While a shortcut is recorded the menus claim no keys, so ⌘Q, ⌘C
 		// and the like reach the recorder.
@@ -59,17 +59,17 @@ func (a *App) refreshMenus() {
 		}
 	}
 	items = append(items, mygo.Separator(),
-		&mygo.MenuItem{ID: "settings", Label: uicopy.SettingsMenu, Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
+		&mygo.MenuItem{ID: "settings", Label: uicopy.SettingsMenu(), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
 		a.updateMenu(),
 		mygo.Separator(),
-		&mygo.MenuItem{ID: "quit", Label: fmt.Sprintf(uicopy.QuitApp, Name), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
+		&mygo.MenuItem{ID: "quit", Label: fmt.Sprintf(uicopy.QuitApp(), Name), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	)
 	a.tray.SetMenu(mygo.NewMenu(items))
 }
 
 func (a *App) updateMenu() *mygo.MenuItem {
 	if !a.updateReady {
-		return &mygo.MenuItem{Label: uicopy.CheckUpdates, Disabled: true}
+		return &mygo.MenuItem{Label: uicopy.CheckUpdates(), Disabled: true}
 	}
 	return updater.MenuItem()
 }

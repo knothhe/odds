@@ -3,16 +3,13 @@
 package updateclient
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -66,7 +63,7 @@ func TestNativeUpdaterAuthenticatesReleaseBeforeStaging(t *testing.T) {
 			digest := sha256.Sum256(archive)
 			manifest := updateartifact.Manifest{
 				Version: scenario.advertised,
-				URL:     "https://github.com/knothhe/odds/releases/download/v" + scenario.advertised + "/odds-" + scenario.advertised + "-darwin-arm64.tar.gz",
+				URL:     "https://github.com/knothhe/odds/releases/download/v" + scenario.advertised + "/odds-" + scenario.advertised + "-arm64.dmg",
 				Size:    int64(len(archive)), Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(private, digest[:])),
 				Notes: "Native integration release notes", Date: "2026-10-31T00:00:00Z",
 			}
@@ -74,7 +71,7 @@ func TestNativeUpdaterAuthenticatesReleaseBeforeStaging(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			feedFile, archiveFile := filepath.Join(directory, "manifest.json"), filepath.Join(directory, "archive.tar.gz")
+			feedFile, archiveFile := filepath.Join(directory, "manifest.json"), filepath.Join(directory, "update.dmg")
 			integrationWriteFile(t, feedFile, feed, 0600)
 			integrationWriteFile(t, archiveFile, archive, 0600)
 			childContext, childCancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -218,58 +215,16 @@ func integrationArchive(t *testing.T, directory, version string) []byte {
 	t.Helper()
 	bundle := filepath.Join(directory, "odds.app")
 	integrationWriteBundle(t, bundle, version, []byte(integrationReplacementExecutable))
-	var archive bytes.Buffer
-	compressed, err := gzip.NewWriterLevel(&archive, gzip.BestCompression)
+	image := filepath.Join(directory, "candidate.dmg")
+	command := exec.Command("/usr/bin/hdiutil", "create", "-quiet", "-format", "UDZO", "-fs", "HFS+", "-srcfolder", directory, image)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("create fixture DMG: %v: %s", err, output)
+	}
+	data, err := os.ReadFile(image)
 	if err != nil {
 		t.Fatal(err)
 	}
-	writer := tar.NewWriter(compressed)
-	// Match MyGo WriteArchive: walk the bundle, use FileInfoHeader, append
-	// slashes to directory names, and retain files' executable permissions.
-	err = filepath.WalkDir(bundle, func(filename string, entry fs.DirEntry, walkError error) error {
-		if walkError != nil {
-			return walkError
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		name, err := filepath.Rel(directory, filename)
-		if err != nil {
-			return err
-		}
-		header.Name = filepath.ToSlash(name)
-		if entry.IsDir() {
-			header.Name += "/"
-		}
-		header.Uid, header.Gid, header.Uname, header.Gname = 0, 0, "", ""
-		if err := writer.WriteHeader(header); err != nil {
-			return err
-		}
-		if info.Mode().IsRegular() {
-			file, err := os.Open(filename)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(writer, file)
-			return errors.Join(err, file.Close())
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := compressed.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return archive.Bytes()
+	return data
 }
 
 func integrationWaitForHelper(t *testing.T, directory string) {

@@ -8,4 +8,4 @@ import (
 	"github.com/knothhe/odds/source/internal/uicopy"
 )
 
-func clearLoginItem() error { return fmt.Errorf(uicopy.CleanupMacOnly) }
+func clearLoginItem() error { return fmt.Errorf("%s", uicopy.CleanupMacOnly()) }

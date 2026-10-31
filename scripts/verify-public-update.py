@@ -46,7 +46,7 @@ def main():
         report=json.loads(result.stdout)
         destination.parent.mkdir(parents=True,exist_ok=True)
         destination.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-        print('Public native Check and authenticated download passed. No app replaced or launched. '+str(destination))
+        print('Public native Check, authenticated DMG and isolated staging passed. No app replaced or launched. '+str(destination))
 
 
 if __name__=='__main__':

@@ -53,19 +53,26 @@ func (a *App) setupUpdates() {
 		mygo.Updater.SetSource(updateclient.New(buildinfo.Repository, buildinfo.PublicKey, mygo.App.Version(), nil))
 		a.updateReady = true
 		a.updateReason = uicopy.UpdatesAutomatic
-		mygo.Use(native.New(updater.Options{Language: uicopy.Locale}))
+		mygo.Use(native.New(updater.Options{}))
 	}
 }
 
 func (a *App) updatesGroup() components.SettingsGroup {
-	return components.SettingsGroup{ID: "updates", Title: uicopy.SoftwareUpdates, Items: []components.SettingsItem{{
-		ID: "check", Description: a.updateReason, Keywords: []string{uicopy.CheckUpdates},
+	return components.SettingsGroup{ID: "updates", Title: uicopy.SoftwareUpdates(), Items: []components.SettingsItem{{
+		ID: "check", Description: a.updateDescription(), Keywords: []string{uicopy.CheckUpdates()},
 		Build: func(c *ui.Context) {
-			components.Button(c, uicopy.CheckUpdates, components.ButtonSecondary).Disabled(!a.updateReady).OnClick(func() {
+			components.Button(c, uicopy.CheckUpdates(), components.ButtonSecondary).Disabled(!a.updateReady).OnClick(func() {
 				if a.updateReady {
 					updater.CheckForUpdates()
 				}
 			})
 		},
 	}}}
+}
+
+func (a *App) updateDescription() string {
+	if a.updateReason == nil {
+		return ""
+	}
+	return a.updateReason()
 }

@@ -16,6 +16,54 @@ MODULE = 'github.com/egoist/mygo'
 VERSION = 'v0.7.3'
 UPDATER_SHA256 = '590c0e03913ec94c1e29c478ae62d348f5805da7d54f7c8dfb6a89b02b778219'
 HELPER_PATH = ROOT / 'patches/mygo-v0.7.3/install-after-exit.sh'
+UPDATES_SHA256 = '49d47cc07e0e593abbdf9ec8bdd57bbefb6c08d14306ef79c62d030e13c96ddf'
+ORIGINAL_DOWNLOAD = 'archive := filepath.Join(work, "update.tar.gz")'
+ORIGINAL_EXTRACT = '''err = update.ExtractArchive(f, unpacked)
+	f.Close()'''
+DMG_EXTRACT = '''// The application source owns the authenticated DMG extraction contract.
+	if len(sources) == 0 { f.Close(); return errors.New("DMG updates require an application extraction source") }
+	extractor, ok := sources[0].(interface { Extract(context.Context, string, string, string) error })
+	if !ok { f.Close(); return errors.New("DMG updates require an application extraction source") }
+	f.Close()
+	err = extractor.Extract(ctx, m.URL, archive, unpacked)'''
+ORIGINAL_WRITE = '''name := c.slug() + "-" + c.Version + "-" + target + ".tar.gz"
+	archive := filepath.Join(stage, name)
+	size, sig, err := writeSigned(archive, key, func(w io.Writer) error {
+		return update.WriteArchive(w, stage, entries)
+	})'''
+DMG_WRITE = '''name := dmgFileName(c, strings.TrimPrefix(target, "darwin-"))
+	archive := filepath.Join(stage, name)
+	// Sign the final DMG in place, after signing/notarization/stapling.
+	f, err := os.Open(archive)
+	if err != nil { return nil, err }
+	sum := sha256.New()
+	size, err := io.Copy(sum, f)
+	closeErr := f.Close()
+	if err != nil { return nil, err }
+	if closeErr != nil { return nil, closeErr }
+	sig := base64.StdEncoding.EncodeToString(ed25519.Sign(key, sum.Sum(nil)))'''
+
+
+def patch_dmg(updater, updates):
+    # Both source files are pinned before any transformation. Exact blocks keep
+    # failures closed if the selected dependency is changed.
+    replacements = [
+        (ORIGINAL_DOWNLOAD, 'archive := filepath.Join(work, "update.dmg")'),
+        (ORIGINAL_EXTRACT, DMG_EXTRACT),
+        ('up.current, target, progress)', 'up.current, target, progress, up.source)'),
+        ('progress func(downloaded, total int64)) error {\n\tpub, err := update.ParsePublicKey(key)',
+         'progress func(downloaded, total int64), sources ...UpdateSource) error {\n\tpub, err := update.ParsePublicKey(key)'),
+    ]
+    for before, after in replacements:
+        if updater.count(before.encode()) != 1:
+            raise PatchError('The pinned DMG updater block is not uniquely identifiable.')
+        updater = updater.replace(before.encode(), after.encode(), 1)
+    if updates.count(ORIGINAL_WRITE.encode()) != 1:
+        raise PatchError('The pinned DMG signing block is not uniquely identifiable.')
+    updates = updates.replace(ORIGINAL_WRITE.encode(), DMG_WRITE.encode(), 1)
+    updates = updates.replace(b'files := []string{archive}', b'files := []string{}', 1)
+    return updater, updates
+
 ORIGINAL_HELPER = '''pid=$1 target=$2 new=$3 work=$4
 shift 4
 trap '' HUP
@@ -147,10 +195,13 @@ def patched_environment(env=None):
     try:
         source = original.read_bytes()
         helper = HELPER_PATH.read_bytes()
+        updates = (original.parent / 'cmd/mygo/updates.go').read_bytes()
     except OSError as error:
         raise PatchError('Cannot read MyGo source or the reviewed updater helper patch.') from error
     if hashlib.sha256(source).hexdigest() != UPDATER_SHA256:
         raise PatchError('MyGo updater source differs from its pinned v0.7.3 hash; review the patch before building.')
+    if hashlib.sha256(updates).hexdigest() != UPDATES_SHA256:
+        raise PatchError('MyGo update packaging source differs from its pinned v0.7.3 hash.')
     old_block = b'const installAfterExit = `' + ORIGINAL_HELPER.encode() + b'`'
     if source.count(old_block) != 1:
         raise PatchError('The pinned MyGo helper block is not uniquely identifiable.')
@@ -158,6 +209,7 @@ def patched_environment(env=None):
         raise PatchError('The updater helper patch is not a newline-terminated Go raw string.')
     replacement = b'const installAfterExit = `' + helper + b'`'
     patched = source.replace(old_block, replacement, 1)
+    patched, patched_updates = patch_dmg(patched, updates)
     try:
         with tempfile.TemporaryDirectory(prefix='odds-mygo-patch-') as temporary:
             directory = Path(temporary)
@@ -170,6 +222,9 @@ def patched_environment(env=None):
             patched_source = mirror / 'updater.go'
             patched_source.chmod(0o600)
             patched_source.write_bytes(patched)
+            packaging = mirror / 'cmd/mygo/updates.go'
+            packaging.chmod(0o600)
+            packaging.write_bytes(patched_updates)
             workspace = directory / 'go.work'
             _temporary_workspace(workspace, mirror, environment)
             environment['GOWORK'] = str(workspace)

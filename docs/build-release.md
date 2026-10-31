@@ -70,18 +70,17 @@ make release VERSION_BUMP=patch RELEASE_FLAGS=--apply
 
 首次发布不改版本、不创建版本提交；升级在检查通过后更新 `mygo.json`，创建版本提交与 annotated tag，再原子推送分支和该 tag。预览不运行构建、不写文件、不创建 tag 或 Release。工作区（包括未跟踪文件）必须干净；配置接入期间的预览被这一条件拒绝是预期行为。不要为了预览强行提交、丢弃或隐藏用户改动。
 
-Actions 对两个发布入口执行同一条流程：检查 → 临时 keychain 导入 → 签名 app 与 DMG → Ed25519 签名完整更新包 → 包身份与最终归档验证 → 上传受控 artifact → 发布 job 再验证 → 创建完整草稿并上传 → 核对远程内容 hash → 公开 Release。
+Actions 对两个发布入口执行同一条流程：检查 → 临时 keychain 导入 → 签名 app 与 DMG → Ed25519 签名最终 DMG → 包身份与最终 DMG 验证 → 上传受控 artifact → 发布 job 再验证 → 创建完整草稿并上传 → 核对远程内容 hash → 公开 Release。
 
-版本 `0.1.0` 的附件为：
+后续版本的附件为（以 `0.1.1` 为例）：
 
 ```text
-odds-0.1.0-arm64.dmg                # 手动安装
-odds-0.1.0-darwin-arm64.tar.gz      # MyGo 原生 updater 使用的完整包
+odds-0.1.1-arm64.dmg               # 手动安装与自动更新共用
 update-darwin-arm64.json           # 版本、下载地址、大小和签名
-SHA256SUMS                        # 上述三个文件的 SHA-256
+SHA256SUMS                        # 上述两个文件的 SHA-256
 ```
 
-当前 MyGo updater 消费专用 tar 归档，DMG 用于手动安装，沿用框架的解包与替换事务。已关闭差分生成。验证时除签名外，还核对更新 URL、版本、源码 commit、CI 通道、架构以及 archive 路径，拒绝越界条目、链接及重复路径，包括 macOS 不区分大小写时的路径冲突；macOS 构建 job 从 tar 和只读挂载的最终 DMG 中复核包签名。
+正式构建仅生成一份 DMG，更新 manifest 的 URL、大小和 Ed25519 签名都对应这份最终 DMG，不生成或上传 tar.gz。沿用已锁定 MyGo 的更新界面和替换事务，通过受控补丁接入 DMG 签名与解包。macOS 构建 job 验证 DMG 签名、只读挂载，检查包内版本、源码 commit、CI 通道、架构与安全文件树，再复核代码签名。Linux 发布 job 复核同一受控 artifact 的 DMG 字节签名、manifest 和完整 SHA256SUMS；不在 Linux 上声称已挂载或检查应用包。
 
 Release 正文保留 Full Changelog 及对应范围内的实际提交说明。签名包和全部附件均核实后才公开，避免用户读到不完整更新源。既有同名资产不自动覆盖，已公开 Release 在复验一致时保持原状。
 
@@ -99,9 +98,9 @@ Release 正文保留 Full Changelog 及对应范围内的实际提交说明。�
 
 复用 MyGo 原生更新窗口及默认排期：启动后检查、运行中每 24 小时检查，唤醒时重新判断；最近成功检查及用户选择保存在正式数据目录的 `updater.json`。窗口展示当前候选的更新说明、检查错误、下载进度和重新启动入口。默认由用户选择安装；用户可在原生更新窗口明确选择后续自动下载/安装，重新启动仍由窗口操作。设置保存的退出屏障最多等待 3 秒，成功时不取消原生退出事件，因此保留更新器的重新启动请求；失败或超时保留输入并返回设置。
 
-Feed 固定为 `https://github.com/knothhe/odds/releases/latest/download/update-darwin-arm64.json`，归档下载固定到相应版本的 Release。稳定 Feed 拒绝预发布候选；发布工具仍可制作预发布包。客户端将每个候选绑定到其独立 manifest；下载保留原生进度与取消，并在交给框架解包前，用编入客户端的公钥验签，再核对包内真实版本、CI 正式身份、架构、commit 格式和安全路径。包内版本必须与候选完全一致，并严格高于当前版本；因此修改 Feed 版本号不能重放历史签名包。检查时同版本或旧版本的有效 Feed 仍可正常表示没有新版本。校验临时文件在关闭下载时清理，安装继续复用框架的替换逻辑。
+Feed 固定为 `https://github.com/knothhe/odds/releases/latest/download/update-darwin-arm64.json`，DMG 下载固定到相应版本的 Release。稳定 Feed 拒绝预发布候选；发布工具仍可制作预发布包。客户端将每个候选绑定到其独立 manifest；下载保留原生进度与取消，成功结束下载前用内置公钥验证 DMG 字节签名。安装阶段再次验签，再只读挂载隔离副本，核对包内真实版本、CI 正式身份、架构、commit 格式和安全文件树。仅复制 `odds.app` 到安装暂存目录，不执行 DMG 中的脚本或安装入口；原有 `/Applications` 链接和展示文件不会被复制。包内版本必须与候选完全一致，并严格高于当前版本；因此修改 Feed 版本号不能重放历史签名包。检查时同版本或旧版本的有效 Feed 仍可正常表示没有新版本。校验临时文件在关闭下载时清理，安装继续复用框架的替换逻辑。
 
-受控构建应用 [MyGo 0.7.3 退出后安装脚本补丁](../patches/mygo-v0.7.3/install-after-exit.sh)，修复上游在新包移动与旧包恢复同时失败时删除备份的问题。补丁入口会核对依赖版本、原文件完整 SHA-256 和唯一替换位置；无法精确匹配、依赖被 replace 或已有其他 overlay 时停止构建。入口在私有临时目录复制依赖，仅修改副本中的脚本，再通过临时 Go workspace 选择该副本。模块缓存及仓库的 `go.mod`、`go.work` 保持原样，临时文件随构建结束清理；升级 MyGo 时必须复核补丁。`make build/install/package`、Actions 正式打包及 `make run/preview` 均经过这一入口。Go 安装集成测试也通过同一入口编译临时 probe。
+受控构建应用 [MyGo 0.7.3 退出后安装脚本补丁](../patches/mygo-v0.7.3/install-after-exit.sh)，修复上游在新包移动与旧包恢复同时失败时删除备份的问题。补丁入口会核对依赖版本、两份原文件完整 SHA-256 和唯一替换位置；无法精确匹配、依赖被 replace 或已有其他 overlay 时停止构建。入口在私有临时目录复制依赖，仅修改副本中的安装脚本、DMG 下载解包入口与 DMG 签名逻辑，再通过临时 Go workspace 选择该副本。模块缓存及仓库的 `go.mod`、`go.work` 保持原样，临时文件随构建结束清理；升级 MyGo 时必须复核补丁。`make build/install/package`、Actions 正式打包及 `make run/preview` 均经过这一入口。Go 安装集成测试也通过同一入口编译临时 probe。
 
 替换和旧包恢复都失败时，helper 保留安装位置旁 `.odds.app.update-*/old` 中的旧包、`app/odds.app` 中的新包和整个工作目录，将精确路径及恢复步骤写入 `RECOVERY.txt`，并停止自动启动。每次移动还核对目录的设备与 inode；若目标突然出现导致 macOS 把包移进其他目录，恢复记录会指出核验后的实际位置，避免误判成功并删除旧包。先退出相关实例并解决权限或文件系统错误，再核对该记录和目标路径后恢复；在确认恢复前不要删除工作目录。正常更新和成功恢复旧包时才清理暂存文件。该保护针对文件替换失败，不提供断电事务或启动健康检查保证。
 
@@ -143,3 +142,9 @@ brew uninstall --cask knothhe/tap/odds
 `make check` 与打包均执行过期检查；升级依赖或工具链后重新生成并审阅。关于页离线按需展示，框架和模块版本优先读取实际构建信息；本地 replacement 明确标注，不展示临时构建路径。新增第三方位图、字体或其他非 Go 资源时，需要按其真实来源扩展收集范围，不能仅依赖模块许可证。
 
 原生及公开链路的分层检查见[桌面验收](verification.md)。
+
+## 界面语言
+
+应用提供 `en` 与 `zh-Hans`，`CFBundleDevelopmentRegion` 为 `en`，bundle 声明这两种本地化。`config.json` 的 `language` 保存 `system`、`en` 或 `zh-Hans`，旧配置缺省为 `system`；未知偏好保留原值并显示英文。跟随系统使用 MyGo 的系统偏好解析与语言变更通知，无法匹配时回退英文；繁体中文不会误当作简体中文。
+
+切换语言即时刷新设置、工具选项、快捷键标签、窗口标题、应用菜单与托盘菜单，保留当前分区、搜索和未保存修改。更新插件沿用同一应用语言；后续打开的更新对话框采用新语言，已在进行的对话框保持其创建时语言。框架控件与原生菜单加载 MyGo 的 `zh-Hans` 资源。系统拥有的 AppKit/WebKit 文案按 macOS 的应用语言机制在下次启动时采用新语言。所有应用文案集中在 `source/internal/uicopy/copy.go`，设计文案在 `design/copy.js`。

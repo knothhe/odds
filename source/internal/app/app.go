@@ -47,13 +47,17 @@ type App struct {
 	saveRevision   uint64
 	saving         bool
 	saveErr        string
+	saveCause      error
 	quitBlocked    bool
 	cleanupTarget  string
 	updateReady    bool
-	updateReason   string
+	updateReason   func() string
 	errMsg         string
+	reportText     func() string
+	reportCause    error
 	readOnly       bool // the config file could not be read: never save over it
 	readOnlyDetail string
+	readOnlySchema int
 	backedUp       bool // an invalid config file was moved aside
 
 	tray             *mygo.Tray
@@ -77,7 +81,7 @@ func Run(preview bool, cleanupTarget string) error {
 	preview = preview || buildinfo.Channel == "preview"
 	if cleanupTarget != "" {
 		if preview || buildinfo.Channel != "dev" || !matchesInstallation(cleanupTarget) {
-			return fmt.Errorf(uicopy.CleanupMismatch)
+			return fmt.Errorf("%s", uicopy.CleanupMismatch())
 		}
 	}
 	base, err := os.UserConfigDir()
@@ -92,13 +96,13 @@ func Run(preview bool, cleanupTarget string) error {
 			return err
 		}
 		defer os.RemoveAll(dir)
-		name = fmt.Sprintf(uicopy.PreviewApp, name)
+		name = fmt.Sprintf(uicopy.PreviewApp(), name)
 		if previewInstance != "" {
-			name = fmt.Sprintf(uicopy.PreviewInstanceApp, name, previewInstance)
+			name = fmt.Sprintf(uicopy.PreviewInstanceApp(), name, previewInstance)
 		}
 	}
 	mygo.App.SetName(name)
-	mygo.App.SetLanguages(uicopy.Locale)
+	mygo.App.SetLanguages("en", "zh-Hans")
 	mygo.App.SetPath(mygo.PathUserData, dir)
 	if cleanupTarget == "" && !mygo.App.RequestSingleInstanceLock() {
 		return nil
@@ -106,18 +110,19 @@ func Run(preview bool, cleanupTarget string) error {
 
 	a := &App{
 		path: filepath.Join(dir, "config.json"), cfg: defaultConfig(), tools: registry(), preview: preview,
-		packaged: mygo.App.IsPackaged(), version: applicationVersion(mygo.App.Version()),
+		packaged: mygo.App.IsPackaged(), version: mygo.App.Version(),
 		cleanupTarget: cleanupTarget,
 	}
 	if cleanupTarget == "" {
 		a.recorder.OnActiveChange = a.suspendShortcuts
 		a.cfg, err = loadConfig(a.path)
+		a.applyLanguage()
 		var corrupt *corruptError
 		var future *futureConfigError
 		switch {
 		case errors.As(err, &future):
 			a.readOnly = true
-			a.readOnlyDetail = fmt.Sprintf(uicopy.FutureConfigDetail, future.schema, configSchema)
+			a.readOnlySchema = future.schema
 		case errors.As(err, &corrupt):
 			a.recoverConfig(err)
 		case err != nil:
@@ -130,7 +135,7 @@ func Run(preview bool, cleanupTarget string) error {
 			if s := t.Settings(); s != nil {
 				if raw, ok := a.cfg.Tools[t.ID()]; ok {
 					if err := json.Unmarshal(raw, s); err != nil {
-						a.recoverConfig(fmt.Errorf(uicopy.ToolSettingsFailure, t.Title(), err))
+						a.recoverConfig(fmt.Errorf(uicopy.ToolSettingsFailure(), t.Title(), err))
 					}
 				}
 			}
@@ -164,6 +169,7 @@ func Run(preview bool, cleanupTarget string) error {
 			mygo.App.Quit()
 		})
 	} else {
+		mygo.App.OnLocaleChanged(func(string) { a.languageChanged() })
 		a.setupUpdates()
 		mygo.App.WhenReady(a.start)
 	}
@@ -177,6 +183,7 @@ func (a *App) start() {
 	a.writer = newConfigWriter(func(c Config) error { return saveConfig(a.path, c) }, func(revision uint64, err error) {
 		go mygo.RunOnMain(func() { a.saved(revision, err) })
 	})
+	a.refreshActions()
 	a.registerShortcuts()
 	if err := a.createTray(); err != nil {
 		a.report(uicopy.TrayFailure, err)
@@ -199,16 +206,31 @@ func (a *App) recoverConfig(cause error) {
 	backup, err := backupConfig(a.path, time.Now())
 	if err != nil {
 		a.readOnly = true
-		a.report(uicopy.BackupFailure, fmt.Errorf(uicopy.BackupErrorDetail, cause, err))
+		a.report(uicopy.BackupFailure, fmt.Errorf(uicopy.BackupErrorDetail(), cause, err))
 		return
 	}
 	a.backedUp = true
-	a.report(fmt.Sprintf(uicopy.SettingsRecovered, backup), cause)
+	a.report(func() string { return fmt.Sprintf(uicopy.SettingsRecovered(), backup) }, cause)
 }
 
-func (a *App) report(msg string, err error) {
-	a.errMsg = fmt.Sprintf(uicopy.ErrorDetail, msg, err.Error())
-	log.Printf("%s: %v", msg, err)
+func (a *App) report(msg func() string, err error) {
+	a.reportText, a.reportCause = msg, err
+	a.errMsg = a.reportMessage()
+	log.Printf("%s: %v", msg(), err)
+}
+
+func (a *App) reportMessage() string {
+	if a.reportText != nil {
+		return fmt.Sprintf(uicopy.ErrorDetail(), a.reportText(), a.reportCause.Error())
+	}
+	return a.errMsg
+}
+
+func (a *App) saveMessage() string {
+	if a.saveCause != nil {
+		return saveErrorMessage(a.saveCause)
+	}
+	return a.saveErr
 }
 
 // save writes the configuration, including every tool's settings.
@@ -220,6 +242,7 @@ func (a *App) save() {
 		if s := t.Settings(); s != nil {
 			raw, err := json.Marshal(s)
 			if err != nil {
+				a.saveCause = err
 				a.saveErr = err.Error()
 				return
 			}

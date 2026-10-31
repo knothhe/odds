@@ -15,7 +15,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import tarfile
 
 sys.dont_write_bytecode = True
 from release import parse, ReleaseError
@@ -175,18 +174,7 @@ def verify_bundle(app, expected, certificate_sha='', identity=''):
                     'Unexpected designated requirement; expected a fixed certificate identity or Developer ID conjunction.')
 
 def release_names(ver):
-    return [f'odds-{ver}-arm64.dmg', f'odds-{ver}-darwin-arm64.tar.gz', 'update-darwin-arm64.json']
-
-def extract_release_archive(filename, destination):
-    # macOS exposes /var through /private/var; compare canonical paths on both
-    # sides, while still refusing links or paths outside the private staging root.
-    destination = destination.resolve()
-    with tarfile.open(filename, 'r:gz') as archive:
-        for member in archive.getmembers():
-            target = (destination / member.name).resolve()
-            require(target != destination and destination in target.parents and
-                    (member.isfile() or member.isdir()), 'Unsafe archive extraction entry.')
-        archive.extractall(destination)
+    return [f'odds-{ver}-arm64.dmg', 'update-darwin-arm64.json']
 
 def verify_release_artifacts(directory, meta, cert, identity):
     require(meta['executor'] == 'ci', 'Formal releases are built by the selected GitHub Actions workflow.')
@@ -197,10 +185,6 @@ def verify_release_artifacts(directory, meta, cert, identity):
                 f'Missing or invalid release artifact: {name}')
     run('go', 'run', './source/cmd/verify-update', '--dir', directory, '--version', meta['version'],
         '--commit', meta['commit'], '--repo', 'knothhe/odds')
-    with tempfile.TemporaryDirectory(prefix='odds-release-extract-') as temporary:
-        extracted = Path(temporary).resolve()
-        extract_release_archive(directory / names[1], extracted)
-        verify_bundle(extracted / 'odds.app', meta, cert, identity)
     with tempfile.TemporaryDirectory(prefix='odds-dmg-verify-') as temporary:
         mount = Path(temporary) / 'mount'
         run('hdiutil', 'attach', '-readonly', '-nobrowse', '-mountpoint', mount, directory / names[0], capture=True)
@@ -234,7 +218,7 @@ def build(channel, package=False):
         cfg['icon'] = str(ROOT / 'assets/icon.png')
     cfg['macos']['signingIdentity'] = sign
     cfg['macos']['minimumSystemVersion'] = '13.0'
-    cfg['macos']['infoPlist'] = {**cfg['macos'].get('infoPlist', {}), 'CFBundleDevelopmentRegion': 'zh-Hans', 'CFBundleLocalizations': ['zh-Hans'],
+    cfg['macos']['infoPlist'] = {**cfg['macos'].get('infoPlist', {}), 'CFBundleDevelopmentRegion': 'en', 'CFBundleLocalizations': ['en', 'zh-Hans'],
                                'OddsChannel': channel, 'OddsCommit': meta['commit'], 'OddsTarget': TARGET}
     if updates:
         cfg['updates'] = updates
@@ -277,6 +261,7 @@ def build(channel, package=False):
         app = output / (meta['name'] + '.app')
         verify_bundle(app, meta, cert, sign)
         if channel == 'release':
+            (output / 'install.sh').unlink(missing_ok=True)
             verify_release_artifacts(output, meta, cert, sign)
         destination = ROOT / 'dist' / channel / TARGET
         destination.parent.mkdir(parents=True, exist_ok=True)

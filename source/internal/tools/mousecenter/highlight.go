@@ -31,7 +31,7 @@ type highlight struct {
 func (h *highlight) show(x, y float64) {
 	if h.win == nil {
 		h.win = mygo.NewWindow(mygo.WindowOptions{
-			Title: uicopy.HighlightWindow, Width: overlaySize, Height: overlaySize,
+			Title: uicopy.HighlightWindow(), Width: overlaySize, Height: overlaySize,
 			Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
 			DisableResize: true, DisableMove: true, AlwaysOnTop: true, SkipTaskbar: true,
 			Panel: true, BackgroundColor: "#00000000",

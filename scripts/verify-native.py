@@ -28,9 +28,8 @@ def main():
         subprocess.run([sys.executable, str(ROOT / 'scripts/go-patched.py'), 'build', '-tags', 'e2e',
                         '-ldflags', '-X github.com/knothhe/odds/source/internal/app.previewInstance=' + token,
                         '-o', str(executable), '.'], cwd=ROOT / 'source', check=True)
-        env = dict(os.environ, MYGO_AUTOMATION=str(address), TMPDIR=str(directory))
+        env = dict(os.environ, MYGO_AUTOMATION=str(address), TMPDIR=str(directory), MYGO_LOCALE='en')
         # Exclude user overrides that could replace the private socket or UI locale.
-        env.pop('MYGO_LOCALE', None)
         with (output / 'native.log').open('w') as log:
             child = subprocess.Popen([str(executable), '--preview'], env=env, stdout=log, stderr=log)
             stream = None
@@ -58,6 +57,7 @@ def main():
             def act(label, action='press'):
                 matches = [n for n in nodes() if n.get('label') == label and action in n.get('actions', [])]
                 if len(matches) != 1:
+                    (output/'native-failure.json').write_text(json.dumps({'step':label,'tree':request('tree')},ensure_ascii=False,indent=2)+'\n')
                     raise RuntimeError('Missing or ambiguous native control: '+label)
                 return request('act', id=matches[0]['id'], action=action)
             try:
@@ -67,7 +67,25 @@ def main():
                     connection.connect(str(address))
                     stream = connection.makefile('rwb')
                     wait(lambda: request('windows')['windows'], 'settings window')
-                    wait(lambda: any(n.get('label') == '复制版本' for n in nodes()), 'About controls')
+                    wait(lambda: any(n.get('label') == 'Copy version' for n in nodes()), 'English About controls')
+                    request('idle', timeout=5000)
+                    screenshot = request('capture')
+                    (output / 'native-general-en.png').write_bytes(base64.b64decode(screenshot['png']))
+                    request('menu', path=['Edit', 'Select All'])
+                    act('Language')
+                    wait(lambda: any(n.get('label') == '简体中文' and 'press' in n.get('actions',[]) for n in nodes()), 'Chinese language option')
+                    act('简体中文')
+                    wait(lambda: any(n.get('label') == '复制版本' for n in nodes()), 'live Chinese settings')
+                    wait(lambda: any('设置' in w['title'] for w in request('windows')['windows']), 'translated window title')
+                    act('语言')
+                    wait(lambda: any(n.get('label') == 'English' and 'press' in n.get('actions',[]) for n in nodes()), 'English language option')
+                    act('English')
+                    wait(lambda: any(n.get('label') == 'Copy version' for n in nodes()), 'live English settings')
+                    request('menu', path=['Edit', 'Select All'])
+                    act('Language')
+                    wait(lambda: any(n.get('label') == '简体中文' and 'press' in n.get('actions',[]) for n in nodes()), 'Chinese language option')
+                    act('简体中文')
+                    wait(lambda: any(n.get('label') == '复制版本' for n in nodes()), 'Chinese About controls')
                     request('idle', timeout=5000)
                     screenshot = request('capture')
                     (output / 'native-general.png').write_bytes(base64.b64decode(screenshot['png']))
@@ -95,7 +113,7 @@ def main():
                     (output / 'native-result.json').write_text(json.dumps({
                         'os': subprocess.check_output(['sw_vers','-productVersion'],text=True).strip(),
                         'arch': os.uname().machine,
-                        'passed': ['native-about','offline-dependencies','framework-menu-language','close-hides',
+                        'passed': ['live-bilingual-settings','live-window-title','bilingual-native-menus','native-about','offline-dependencies','framework-menu-language','close-hides',
                                    'second-instance-focus','shortcut-recording-cancel','normal-quit'],
                         'notCovered': ['system-hotkeys','login-items','display-removal','minimum-macos-13','published-update']
                     }, ensure_ascii=False, indent=2)+'\n')
