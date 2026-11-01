@@ -75,9 +75,10 @@ func (t *Tool) Actions() []tool.Action {
 	}
 }
 
-// CenterOnCurrent moves the pointer to the center of the display it is on.
+// CenterOnCurrent moves the pointer to the display the user is working on,
+// determined by the foreground window rather than the pointer's position.
 func (t *Tool) CenterOnCurrent() {
-	if d, ok := displayAt(mygo.Screen.Displays(), mygo.Screen.CursorScreenPoint()); ok {
+	if d, ok := currentDisplay(mygo.Screen.Displays(), foregroundWindowBounds()); ok {
 		t.moveTo(center(d.Bounds))
 	}
 }
